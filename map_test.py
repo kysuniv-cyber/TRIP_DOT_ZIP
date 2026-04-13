@@ -4,7 +4,7 @@
 
 import streamlit as st
 from streamlit_folium import st_folium
-from components.travel_map import TravelMap, PlaceInfo
+from utils.travel_map import TravelMap, PlaceInfo
 
 st.title("AI 여행 코스 추천")
 
