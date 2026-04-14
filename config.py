@@ -21,3 +21,5 @@ class Settings:
             raise ValueError("WEATHER_API_KEY가 설정되지 않았습니다")
         elif not self.places_api_key:
             raise ValueError("PLACES_API_KEY가 설정되지 않았습니다")
+        else:
+            raise ValueError("메롱")

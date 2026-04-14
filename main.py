@@ -44,3 +44,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+# --------------
+import traceback
+
+try:
+    # 기존 실행 코드
+    main()
+except Exception as e:
+    print("에러 타입:", type(e).__name__)
+    print("에러 내용:", repr(e))
+    traceback.print_exc()
+    raise
