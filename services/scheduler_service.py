@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from utils.custom_exception import CommonCustomError, RouteNotFoundError
 load_dotenv()
-api_key = os.getenv("GOOGLE_PLACE_API_KEY")
+api_key = os.getenv("PLACES_API_KEY")
 
 # API 키
 # 구글 맵 클라이언트 설정 (발급받은 API 키 입력)
