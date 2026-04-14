@@ -1,5 +1,4 @@
 # 환경설정
-
 # pip install googlemaps
 import pandas as pd
 import googlemaps
@@ -7,12 +6,13 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from utils.custom_exception import CommonCustomError, RouteNotFoundError
+from config import Settings
 load_dotenv()
 api_key = os.getenv("PLACES_API_KEY")
 
 # API 키
 # 구글 맵 클라이언트 설정 (발급받은 API 키 입력)
-gmaps = googlemaps.Client(key=api_key)
+places_api_key = Settings.places_api_key
 
 # 2. STAY_TIME_CONFIG
 # Google Places API Table A & B 기반 평균 체류 시간 설정 ★ Placesearch
