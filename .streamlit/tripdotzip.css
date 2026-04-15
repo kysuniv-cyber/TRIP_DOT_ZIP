@@ -1,12 +1,57 @@
 :root {
+    /* 브랜드 포인트 컬러: 버튼, 강조 텍스트, 아바타 테두리 */
     --trip-blue: #2f7df6;
+    /* 브랜드 포인트 진한 색: 버튼 hover 상태 */
     --trip-blue-dark: #1f67dd;
+    /* 브랜드 포인트 연한 배경: 작은 아이콘 배경, 전송 버튼 배경 */
     --trip-blue-soft: #eef5ff;
+    /* 앱 전체 배경: 채팅 영역, Streamlit 기본 배경 */
     --trip-bg: #f7fbff;
+    /* 표면 배경: 사이드바, 카드, 봇 말풍선, 입력창 */
+    --trip-surface: #ffffff;
+    /* 경계선: 카드/말풍선/입력창/사이드바 구분선 */
     --trip-line: #e1ebf8;
+    /* 기본 글자색: 본문, 제목, 봇 답변 */
     --trip-text: #263241;
+    /* 보조 글자색: 라벨, 설명, 시간, placeholder */
     --trip-muted: #7f8b9c;
-    --trip-white: #ffffff;
+    /* 사용자 말풍선 배경 */
+    --trip-user-bg: #2f7df6;
+    /* 사용자 말풍선/어두운 버튼 위 글자색 */
+    --trip-user-text: #ffffff;
+    /* 사용자 아바타 배경 */
+    --trip-avatar-user-bg: #5d6675;
+    /* 필요 시 그림자/강조 배경에 쓰는 반투명 포인트 컬러 */
+    --trip-shadow-bg: rgba(47, 125, 246, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* 다크모드 브랜드 포인트 컬러 */
+        --trip-blue: #78a8ff;
+        /* 다크모드 버튼 hover 색 */
+        --trip-blue-dark: #4f8cff;
+        /* 다크모드 연한 포인트 배경 */
+        --trip-blue-soft: #233b60;
+        /* 다크모드 앱 전체 배경 */
+        --trip-bg: #202936;
+        /* 다크모드 표면 배경: 카드, 말풍선, 입력창 */
+        --trip-surface: #2b3544;
+        /* 다크모드 경계선 */
+        --trip-line: #3d4a5d;
+        /* 다크모드 기본 글자색 */
+        --trip-text: #eef3fb;
+        /* 다크모드 보조 글자색 */
+        --trip-muted: #b0bdcc;
+        /* 다크모드 사용자 말풍선 배경 */
+        --trip-user-bg: #347df1;
+        /* 다크모드 사용자 말풍선 글자색 */
+        --trip-user-text: #ffffff;
+        /* 다크모드 사용자 아바타 배경 */
+        --trip-avatar-user-bg: #5c6878;
+        /* 다크모드 반투명 포인트 컬러 */
+        --trip-shadow-bg: rgba(120, 168, 255, 0.12);
+    }
 }
 
 html, body, [class*="css"] {
@@ -19,8 +64,23 @@ html, body, [class*="css"] {
     visibility: hidden;
 }
 
-.stApp {
-    background: var(--trip-bg);
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stMainBlockContainer"],
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"] {
+    background: var(--trip-bg) !important;
+    color: var(--trip-text) !important;
+}
+
+[data-testid="stHeader"] button,
+[data-testid="stToolbar"] button,
+[data-testid="stToolbar"] [role="button"],
+[data-testid="stDeployButton"] button {
+    color: var(--trip-text) !important;
+    background: transparent !important;
 }
 
 .main .block-container {
@@ -29,7 +89,7 @@ html, body, [class*="css"] {
 }
 
 [data-testid="stSidebar"] {
-    background: var(--trip-white);
+    background: var(--trip-surface);
     border-right: 1px solid var(--trip-line);
 }
 
@@ -51,7 +111,7 @@ html, body, [class*="css"] {
     border-radius: 50%;
     display: grid;
     place-items: center;
-    background: white;
+    background: var(--trip-surface);
     border: 2px solid var(--trip-blue);
     overflow: hidden;
 }
@@ -85,7 +145,7 @@ html, body, [class*="css"] {
 
 .info-card,
 .history-card {
-    background: var(--trip-white);
+    background: var(--trip-surface);
     border: 1px solid var(--trip-line);
     border-radius: 8px;
     margin-bottom: 12px;
@@ -180,14 +240,14 @@ html, body, [class*="css"] {
 }
 
 .avatar.bot {
-    background: white;
+    background: var(--trip-surface);
     border: 2px solid var(--trip-blue);
     overflow: hidden;
 }
 
 .avatar.user {
-    background: #5d6675;
-    color: white;
+    background: var(--trip-avatar-user-bg);
+    color: var(--trip-user-text);
 }
 
 .avatar.bot img {
@@ -209,14 +269,14 @@ html, body, [class*="css"] {
 }
 
 .bubble.bot {
-    background: white;
+    background: var(--trip-surface);
     border: 1px solid var(--trip-line);
     color: var(--trip-text);
 }
 
 .bubble.user {
-    background: var(--trip-blue);
-    color: white;
+    background: var(--trip-user-bg);
+    color: var(--trip-user-text);
 }
 
 .loading-bubble {
@@ -281,7 +341,7 @@ html, body, [class*="css"] {
 
 .timestamp {
     margin-top: 7px;
-    color: #9aa6b6;
+    color: var(--trip-muted);
     font-size: 12px;
 }
 
@@ -301,7 +361,7 @@ html, body, [class*="css"] {
     border: 1px solid var(--trip-line) !important;
     border-radius: 8px !important;
     color: var(--trip-text) !important;
-    background: white !important;
+    background: var(--trip-surface) !important;
 }
 
 .stButton > button {
@@ -309,26 +369,39 @@ html, body, [class*="css"] {
     border-radius: 8px !important;
     border: 1px solid var(--trip-blue) !important;
     color: var(--trip-blue) !important;
-    background: white !important;
+    background: var(--trip-surface) !important;
     font-weight: 800 !important;
     box-shadow: none !important;
 }
 
 .stButton > button:hover,
 .stButton > button:hover {
-    color: white !important;
+    color: var(--trip-user-text) !important;
     background: var(--trip-blue-dark) !important;
     border-color: var(--trip-blue-dark) !important;
 }
 
-[data-testid="stChatInput"] {
-    background: var(--trip-bg);
+[data-testid="stBottomBlockContainer"],
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div {
+    background: var(--trip-bg) !important;
 }
 
 [data-testid="stChatInput"] textarea {
     border: 1px solid var(--trip-line) !important;
     border-radius: 8px !important;
     min-height: 46px !important;
+    color: var(--trip-text) !important;
+    background: var(--trip-surface) !important;
+}
+
+[data-testid="stChatInput"] textarea::placeholder {
+    color: var(--trip-muted) !important;
+}
+
+[data-testid="stChatInput"] button {
+    background: var(--trip-blue-soft) !important;
+    color: var(--trip-blue) !important;
 }
 
 .result-wrap {
@@ -336,7 +409,7 @@ html, body, [class*="css"] {
 }
 
 .result-card {
-    background: white;
+    background: var(--trip-surface);
     border: 1px solid var(--trip-line);
     border-radius: 8px;
     padding: 18px;
