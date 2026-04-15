@@ -1,24 +1,19 @@
 import os
+import traceback
 from dotenv import load_dotenv
 
 from llm.graph import build_trip_agent
 
 load_dotenv()
 
+# 실행 모드 선택
+# "invoke" : 최종 답변만 한 번에 출력
+# "debug"  : 중간 tool trace까지 전부 출력
+# "stream" : 스트리밍 형태로 flush 출력
+RUN_MODE = "stream"         # <- 여기 있는 RUN_MODE를 바꾸면 출력 형식이 바뀜.
 
-def main():
-    if not os.getenv("OPENAI_API_KEY"):
-        raise ValueError("OPENAI_API_KEY가 .env에 설정되어 있지 않습니다.")
 
-    agent = build_trip_agent()
-
-    user_input = """
-    성수에서 1일 데이트 코스 짜줘.
-    오전 10시부터 오후 6시까지 놀 거고,
-    감성 카페, 맛집, 산책 가능한 곳이 포함되면 좋겠어.
-    """
-
-    # 한번에 출력
+def run_invoke(agent, user_input: str):
     result = agent.invoke(
         {
             "messages": [
@@ -28,33 +23,84 @@ def main():
     )
 
     print("=== Agent Result ===")
-    print(result['messages'][-1].content)
+    print(result["messages"][-1].content)
 
-    # flush로 출력
-    # stream = llm.stream(
-    #     input={
-    #         "messages": [('human', user_input)]
-    #     },
-    #     stream_mode='messages'
-    # )
-    #
-    # for chunk, metadata in stream:
-    #     print(chunk.content, end='', flush=True)
+
+def run_debug(agent, user_input: str):
+    result = agent.invoke(
+        {
+            "messages": [
+                {"role": "user", "content": user_input}
+            ]
+        }
+    )
+
+    print("=== Final Answer ===")
+    print(result["messages"][-1].content)
+
+    print("\n=== Tool Trace ===")
+    for i, msg in enumerate(result["messages"], 1):
+        print(f"[{i}] type={getattr(msg, 'type', None)} / name={getattr(msg, 'name', None)}")
+        print(getattr(msg, "content", None))
+        print("-" * 80)
+
+
+def run_stream(agent, user_input: str):
+    stream = agent.stream(
+        {
+            "messages": [
+                {"role": "user", "content": user_input}
+            ]
+        },
+        stream_mode="messages",
+    )
+
+    print("=== Streaming Result ===")
+
+    for chunk, metadata in stream:
+        if metadata.get("langgraph_node") != "model":
+            continue
+
+        # text block 기반 출력
+        if hasattr(chunk, "content_blocks"):
+            for block in chunk.content_blocks:
+                if block.get("type") == "text":
+                    print(block.get("text", ""), end="", flush=True)
+
+        # fallback
+        elif hasattr(chunk, "content") and isinstance(chunk.content, str):
+            print(chunk.content, end="", flush=True)
+
+    print()
+
+
+def main():
+    if not os.getenv("OPENAI_API_KEY"):
+        raise ValueError("OPENAI_API_KEY가 .env에 설정되어 있지 않습니다.")
+
+    agent = build_trip_agent()
+
+    user_input = """
+부산에서 1일 여행 일정 짜줘.
+카페랑 맛집이 포함되면 좋고,
+오전 10시부터 시작하는 시간대별 일정으로 만들어줘.
+"""
+
+    if RUN_MODE == "invoke":
+        run_invoke(agent, user_input)
+    elif RUN_MODE == "debug":
+        run_debug(agent, user_input)
+    elif RUN_MODE == "stream":
+        run_stream(agent, user_input)
+    else:
+        raise ValueError(f"지원하지 않는 RUN_MODE입니다: {RUN_MODE}")
 
 
 if __name__ == "__main__":
-    main()
-
-
-
-# --------------
-import traceback
-
-try:
-    # 기존 실행 코드
-    main()
-except Exception as e:
-    print("에러 타입:", type(e).__name__)
-    print("에러 내용:", repr(e))
-    traceback.print_exc()
-    raise
+    try:
+        main()
+    except Exception as e:
+        print("에러 타입:", type(e).__name__)
+        print("에러 내용:", repr(e))
+        traceback.print_exc()
+        raise
