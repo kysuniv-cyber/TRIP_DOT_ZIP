@@ -2,7 +2,6 @@ from openai import OpenAI
 from middlewares.pipeline import LLMRequest, LLMResponse
 import re
 
-# TODO: 0. safety_mw와 같은 파일입니다. proto의 app.py와 연결하기 위해 만든 테스트 파일입니다.
 # TODO: 1. 욕설 및 비방표현 필터링
 # TODO: 2. 개인정보 마스킹 및 필터링
 

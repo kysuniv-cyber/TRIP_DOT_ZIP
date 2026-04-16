@@ -20,13 +20,22 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 from mock_tools.place_tools import search_places
 from mock_tools.schedule_tools import build_schedule
 from mock_tools.weather_tools import get_weather
-from proto.constants import SYSTEM_PROMPT
-from proto.utils import get_ai_response, parse_buttons
 
+from middlewares.executor import AgentExecutor
+from middlewares.registry import ToolRegistry
+from llm.prompts import SYSTEM_PROMPT
+from proto.utils import parse_buttons
 load_dotenv(ROOT_DIR / ".env")
 
 GUIDE_MOUSE_IMAGE = ROOT_DIR / "assets" / "tripdotzip_guide_mouse.png"
 MOUSE_ICON_IMAGE = ROOT_DIR / "assets" / "tripdotzip_mouse_icon.png"
+
+tool_registry = ToolRegistry()
+tool_registry.register("get_weather", get_weather)
+tool_registry.register("search_places", search_places)
+tool_registry.register("build_schedule", build_schedule)
+
+executor = AgentExecutor(registry=tool_registry)
 
 
 st.set_page_config(
@@ -324,6 +333,10 @@ def render_intro() -> None:
 
 
 def initialize_greeting() -> None:
+    st.write("DEBUG: initialize_greeting 진입")
+    print("DEBUG: initialize_greeting 진입")
+    print("DEBUG: executor =", executor)
+
     if st.session_state.initialized:
         return
 
@@ -333,8 +346,13 @@ def initialize_greeting() -> None:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": "안녕하세요! 여행 추천을 받고 싶어요."},
             ]
-            greeting_raw = get_ai_response(init_payload)
-    except Exception:
+            print("DEBUG: executor.run 직전")
+            greeting_raw = executor.run(init_payload)
+            print("DEBUG: executor.run 직후", greeting_raw)
+
+    except Exception as exc:
+        print("DEBUG: initialize_greeting 예외 =", exc)
+        st.write(f"DEBUG 예외: {exc}")
         greeting_raw = (
             "안녕하세요! 저는 여행 추천을 도와드릴 트립닷집이에요.\n"
             "어디로 여행을 가고 싶으신가요? [BUTTONS:국내 여행|해외 여행|아직 모르겠어요]"
@@ -349,6 +367,9 @@ def initialize_greeting() -> None:
 
 
 def process_user_input(user_text: str) -> None:
+    print("DEBUG: process_user_input 진입")
+    print("DEBUG: user_text =", user_text)
+
     update_trip_info(user_text)
     st.session_state.messages.append(
         {"role": "user", "content": user_text, "time": now_label()}
@@ -359,13 +380,18 @@ def process_user_input(user_text: str) -> None:
     for message in st.session_state.messages:
         api_payload.append({"role": message["role"], "content": message["content"]})
 
+    print("DEBUG: executor.run 직전")
+    print("DEBUG: api_payload =", api_payload)
+
     loading_slot = st.empty()
     try:
         with loading_slot.container():
             render_loading_message()
         with st.spinner(""):
-            raw_reply = get_ai_response(api_payload)
+            raw_reply = executor.run(api_payload)
+            print("DEBUG: executor.run 직후", raw_reply)
     except Exception as exc:
+        print("DEBUG: process_user_input 예외 =", exc)
         raw_reply = f"지금은 AI 응답을 불러오지 못했어요. 설정을 확인한 뒤 다시 시도해주세요.\n\n오류: {exc}"
     finally:
         loading_slot.empty()
@@ -375,7 +401,6 @@ def process_user_input(user_text: str) -> None:
         {"role": "assistant", "content": reply_text, "time": now_label()}
     )
     st.session_state.quick_buttons = reply_buttons
-
 
 def render_chat_area() -> None:
     st.markdown('<div class="chat-stage">', unsafe_allow_html=True)
