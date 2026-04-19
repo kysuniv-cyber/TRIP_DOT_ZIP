@@ -43,15 +43,15 @@ class MapToolInput(BaseModel):
 # 2. 내부 헬퍼
 # ---------------------------------------------------------------------------
 
-def _calc_center(places: List[PlaceItem]) -> tuple[float, float]:
+def _calc_center(places: List[PlaceInfo]) -> tuple[float, float]:
     """장소 목록의 위경도 평균으로 지도 중심 계산"""
     lat = sum(p.lat for p in places) / len(places)
     lng = sum(p.lng for p in places) / len(places)
     return lat, lng
 
 
-def _build_place_infos(places: List[PlaceItem]) -> list[PlaceInfo]:
-    """PlaceItem(Pydantic) → PlaceInfo(dataclass) 변환"""
+def _build_place_infos(places: List[MarkerInfo]) -> list[PlaceInfo]:
+    """MarkerInfo(Pydantic) → PlaceInfo(dataclass) 변환"""
     # order 기준 정렬 보장
     sorted_places = sorted(places, key=lambda p: p.order)
     return [
@@ -74,7 +74,7 @@ def _build_place_infos(places: List[PlaceItem]) -> list[PlaceInfo]:
 
 @tool("map_render", args_schema=MapToolInput)
 def map_tool(
-    places:     List[PlaceItem],
+    places:     List[MarkerInfo],
     center_lat: Optional[float] = None,
     center_lng: Optional[float] = None,
     zoom:       int = 13,
@@ -101,7 +101,7 @@ def map_tool(
             else _calc_center(places)
         )
 
-        # PlaceItem → PlaceInfo 변환
+        # MarkerInfo → PlaceInfo 변환
         place_infos = _build_place_infos(places)
 
         # TravelMap 체이닝
