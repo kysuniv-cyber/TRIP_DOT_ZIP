@@ -36,7 +36,7 @@ class TravelAgentState(TypedDict, total=False):     # 처음부터 모든 값이
     weather_data: Dict
 
     # 4. 대화형 흐름 제어
-    missing_slot: List[str]     # 아직 입력하지 않은 정보
+    missing_slot: List[str]     # 아직 입력되지 않은 필수 정보
     need_weather: bool          # 날씨 조회 필요 여부
 
     # 4. 지도 및 응답 제어

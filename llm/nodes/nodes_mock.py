@@ -1,7 +1,7 @@
 from llm.graph.state import TravelAgentState
 from llm.graph.contracts import StateKeys       # 규약 임포트
 from services.intent_service import classify_intent_by_rule
-from services.place_search_tool import get_places_from_api
+from services.place_search_tool import search_place_tool
 from services.scheduler_service import create_schedule
 
 # 1. 의도 분석 노드
@@ -34,13 +34,36 @@ def route_intent_node(state: TravelAgentState):
 def search_places_node(state: TravelAgentState):
     """
     State에 저장된 destination, styles, constraints를 꺼내서
-    장소 검색 서비스를 호출하는 mock 노드
+    place_search_tool을 호출하는 mock 노드
     """
-    # State에 저장된 destination, styles 등을 꺼내서 함수 호출
-    response = get_places_from_api(
-        destination=state.get(StateKeys.DESTINATION, "부산"),
-        styles=state.get(StateKeys.STYLES, []),
-        constraints=state.get(StateKeys.CONSTRAINTS, []),
+    destination = state.get(StateKeys.DESTINATION)
+    styles = state.get(StateKeys.STYLES, [])
+    constraints = state.get(StateKeys.CONSTRAINTS, [])
+
+    # destination이 없으면 검색하지 않음
+    if not destination:
+        return {StateKeys.MAPPED_PLACES: []}
+
+    # 내부 constraint 값을 API 검색용 키워드로 보정
+    constraint_keyword_map = {
+        "indoor": "실내",
+        "outdoor": "실외",
+        "pet": "애견동반",
+        "quiet": "조용한",
+        "budget": "가성비",
+    }
+
+    api_constraints = [
+        constraint_keyword_map.get(c, c) for c in constraints
+    ]
+
+    # LangChain tool 객체 자체를 invoke하는 대신,
+    # 현재 디버깅 단계에서는 원래 파이썬 함수(func)를 직접 호출
+    response = search_place_tool.func(
+        destination=destination,
+        styles=styles,
+        constraints=api_constraints,
+        limit=5,
     )
 
     # mapped_places를 State에 저장 -> 알맹이(places)만 꺼내서 저장
@@ -75,6 +98,12 @@ def scheduler_node(state: TravelAgentState):
     # 사용자가 최종 선택한 장소가 있으면 그것을 우선 사용
     places = state.get(StateKeys.SELECTED_PLACES) or state.get(StateKeys.MAPPED_PLACES, [])
     start_time = state.get(StateKeys.START_TIME, "09:00")
+
+    # 장소가 하나도 없으면 scheduler를 호출하지 않음
+    if not places:
+        return {
+            StateKeys.ITINERARY: []
+        }
 
     # 검색된 후보지들을 꺼내서 스케줄러에 전달
     itinerary_result = create_schedule(

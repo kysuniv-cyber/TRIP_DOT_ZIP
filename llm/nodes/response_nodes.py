@@ -19,9 +19,9 @@ def build_response_node(state: TravelAgentState) -> dict:
     # (A) 날씨 정보가 있을 때
     if weather:
         # 실제 weather_service 반환 구조에 따라 key는 추후 맞춰줄 수 있음
-        temp = weather.get("temp", "알 수 없음")
-        desc = weather.get("description", "정보 없음")
-        response_text += f"☀️ **{destination} 날씨 정보**: 현재 기온은 {temp}도이며, {desc} 상태입니다.\n\n"
+        summary = weather.get("summary", "날씨 정보 없음")
+        condition = weather.get("condition", "정보 없음")
+        response_text += f"☀️ **{destination} 날씨 정보**: {summary} (condition: {condition})\n\n"
 
     # (B) 일정 정보가 있을 때 (최우선순위)
     if itinerary:
@@ -43,7 +43,12 @@ def build_response_node(state: TravelAgentState) -> dict:
             response_text += f"- {place_name} ({category})\n"
         response_text += "\n이 장소들을 중심으로 일정을 짜드릴까요?"
 
-    # (D) 일반 대화 혹은 데이터 부족 시
+    # (D) 목적지는 있는데 장소 검색 결과가 비었을 때
+    elif destination:
+        response_text = f"{destination}에서 조건에 맞는 장소를 아직 찾지 못했어요. 조건을 조금 완화해서 다시 추천해드릴까요?"
+
+
+    # (E) 일반 대화 혹은 데이터 부족 시
     else:
         response_text = "죄송해요, 요청하신 정보를 찾지 못했습니다. 다시 말씀해 주시겠어요?"
 

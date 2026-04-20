@@ -1,5 +1,5 @@
 import re
-from typing import TypedDict, Literal, Optional
+from typing import TypedDict, Literal
 
 IntentType = Literal[
     "general_chat",
@@ -55,7 +55,7 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
 
     travel_keywords = [
         "여행 추천", "여행지 추천", "국내 여행", "해외 여행", "여행 갈만한 곳",
-        "놀러 갈 곳", "추천해줘", "여행 어디"
+        "놀러 갈 곳", "추천해줘", "여행 어디", "여행"
     ]
 
     greeting_patterns = [
@@ -68,7 +68,14 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
         r"^hello+$",
     ]
 
-    if _contains_any(text, modify_keywords):
+    has_modify = _contains_any(text, modify_keywords)
+    has_weather = _contains_any(text, weather_keywords)
+    has_schedule = _contains_any(text, schedule_keywords)
+    has_place = _contains_any(text, place_keywords)
+    has_travel = _contains_any(text, travel_keywords)
+
+    # 1. 수정 요청 우선
+    if has_modify:
         return {
             "intent": "modify_request",
             "confidence": 0.94,
@@ -76,15 +83,8 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "수정/변경 요청 키워드 감지",
         }
 
-    if _contains_any(text, weather_keywords):
-        return {
-            "intent": "weather_query",
-            "confidence": 0.95,
-            "route": "weather",
-            "reason": "날씨 관련 키워드 감지",
-        }
-
-    if _contains_any(text, schedule_keywords):
+    # 2. 일정 생성이 있으면 weather보다 우선
+    if has_schedule:
         return {
             "intent": "schedule_generation",
             "confidence": 0.93,
@@ -92,7 +92,8 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "일정 생성 관련 키워드 감지",
         }
 
-    if _contains_any(text, place_keywords):
+    # 3. 장소 검색도 weather보다 우선
+    if has_place:
         return {
             "intent": "place_search",
             "confidence": 0.90,
@@ -100,12 +101,22 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "장소 검색 관련 키워드 감지",
         }
 
-    if _contains_any(text, travel_keywords):
+    # 4. 여행 추천도 weather보다 우선
+    if has_travel:
         return {
             "intent": "travel_recommendation",
             "confidence": 0.89,
             "route": "travel",
             "reason": "여행 추천 관련 키워드 감지",
+        }
+
+    # 5. 날씨는 단독 질문일 때만 처리
+    if has_weather and not (has_schedule or has_place or has_travel):
+        return {
+            "intent": "weather_query",
+            "confidence": 0.95,
+            "route": "weather",
+            "reason": "날씨 단독 질의로 판단",
         }
 
     for pattern in greeting_patterns:
