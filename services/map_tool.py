@@ -1,3 +1,9 @@
+"""
+    FileName: map_tool.py
+    Location: services/map_tool.py
+    Role: LLM에게 위치 좌표 정보를 받아서 map을 그리는 역할.
+"""
+
 import streamlit as st
 from pydantic import BaseModel, Field
 from langchain.tools import tool

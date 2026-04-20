@@ -1,3 +1,8 @@
+"""
+    FileName: travel.py
+    Location: ui/travel_map.py
+    Role: folium 맵 객체
+"""
 import folium
 from pydantic import BaseModel
 from streamlit_folium import st_folium
@@ -6,10 +11,7 @@ from constants import POPUP_TEMPLATE, TOOLTIP_TEMPLATE, MARKER_ICON_TEMPLATE
 # from utils.map_util import map_place_type_to_category
 from folium import plugins
 
-# 아, 이건 내부적으로 사용할 객체구만.
 @dataclass
-# TODO: 지금은 아직 어떤 변수를 가지고와서 placeInfo로 만들지도 정의하지 않았는데 BaseModel로 넣으면 에러가 발생해서,
-# @dataclass로 선언해서 썼다가 어느 정도 정리가 되면 다시 BaseModel로 변경 후 엄격하게 적용 예정.
 class PlaceInfo():
     # 장소 정보
     place_id: str                       # ID

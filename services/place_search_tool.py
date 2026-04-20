@@ -1,3 +1,9 @@
+"""
+    FileName: place_search_tool.py
+    Location: services/place_search_tool.py
+    Role: LLM에게 Destination 및 다른 제약조건이나 사용자의 선호도 조건을 받아서 
+        Google Place API(NEW)를 호출해 장소 정보를 받아오는 역할
+"""
 import streamlit as st
 from pydantic import BaseModel, Field
 from langchain.tools import tool
@@ -8,12 +14,114 @@ from utils.custom_exception import PlaceNotFoundError
 from config import Settings
 import json
 
-# TODO: 1. 필요한 부분 category(types 매핑)
-# TODO: 2. API에서 가져온 정보가지고 LLM에 전달할 장소 추천 멘트 생성
+# API KEY
 places_api_key = Settings.places_api_key
 
-# Test를 위한 값.
+# Test를 위한 값. => True 시 파일로 다운로드 가능.
 SAVE_FILE_TEST_MODE = False
+
+# 카테고리 단순화를 위한 mapping값. => TODO: constants.py
+PLACE_CATEGORY_MAP = {
+    # --- 문화 및 역사 (STAY_TIME_CONFIG 기준) ---
+    "art_gallery": ["art_gallery"],
+    "art_museum": ["art_museum"],
+    "museum": ["museum", "history_museum", "planetarium"],
+    "castle": ["castle"],
+    "cultural_landmark": ["cultural_landmark", "historical_landmark", "historical_place", "monument"],
+    "historical_place": ["historical_place"],
+    "history_museum": ["history_museum"],
+    "monument": ["monument", "sculpture"],
+    "sculpture": ["sculpture"],
+    "cultural_center": ["cultural_center", "auditorium", "community_center", "convention_center", "art_studio"],
+
+    # --- 엔터테인먼트 및 여가 ---
+    "amusement_park": ["amusement_park", "amusement_center", "roller_coaster", "water_park"],
+    "aquarium": ["aquarium"],
+    "zoo": ["zoo", "wildlife_park", "wildlife_refuge"],
+    "botanical_garden": ["botanical_garden"],
+    "wildlife_park": ["wildlife_park"],
+    "water_park": ["water_park"],
+    "casino": ["casino"],
+    "movie_theater": ["movie_theater", "movie_rental"],
+    "performing_arts_theater": ["performing_arts_theater", "amphitheatre", "concert_hall", "philharmonic_hall"],
+    "opera_house": ["opera_house"],
+
+    # --- 공원 및 자연 ---
+    "park": ["park", "city_park", "dog_park", "playground", "plaza"],
+    "city_park": ["city_park"],
+    "national_park": ["national_park", "state_park"],
+    "hiking_area": ["hiking_area", "mountain_peak", "nature_preserve", "woods"],
+    "garden": ["garden"],
+    "beach": ["beach", "lake", "river", "island"],
+    "marina": ["marina", "fishing_pier", "fishing_pond"],
+    "picnic_ground": ["picnic_ground", "barbecue_area"],
+
+    # --- 식음료 (모든 세부 음식점 포함) ---
+    "restaurant": [
+        "restaurant", "american_restaurant", "asian_restaurant", "chinese_restaurant", 
+        "french_restaurant", "italian_restaurant", "japanese_restaurant", "korean_restaurant", 
+        "mexican_restaurant", "thai_restaurant", "seafood_restaurant", "steak_house", 
+        "sushi_restaurant", "vietnamese_restaurant", "fine_dining_restaurant", "food_court",
+        "fast_food_restaurant", "pizza_restaurant", "hamburger_restaurant", "ramen_restaurant"
+        # ... 기타 모든 *_restaurant 타입 포함
+    ],
+    "cafe": ["cafe", "cat_cafe", "dog_cafe", "internet_cafe"],
+    "bar": ["bar", "pub", "wine_bar", "night_club", "cocktail_bar", "lounge_bar", "sports_bar"],
+    "bakery": ["bakery", "cake_shop", "pastry_shop"],
+    "coffee_shop": ["coffee_shop", "tea_house", "juice_shop", "coffee_roastery"],
+    "ice_cream_shop": ["ice_cream_shop", "dessert_shop", "dessert_restaurant", "confectionery"],
+
+    # --- 쇼핑 ---
+    "shopping_mall": ["shopping_mall"],
+    "department_store": ["department_store", "hypermarket", "warehouse_store"],
+    "clothing_store": ["clothing_store", "shoe_store", "jewelry_store", "womens_clothing_store", "sportswear_store"],
+    "market": ["market", "farmers_market", "flea_market", "grocery_store", "supermarket"],
+    "gift_shop": ["gift_shop", "toy_store", "book_store"],
+    "duty_free_store": ["duty_free_store"],
+
+    # --- 종교 및 기타 ---
+    "church": ["church", "mosque", "synagogue", "hindu_temple", "buddhist_temple", "shinto_shrine"],
+    "hindu_temple": ["hindu_temple"],
+    "mosque": ["mosque"],
+    "synagogue": ["synagogue"],
+    "shrine": ["shinto_shrine"],
+    "library": ["library"],
+    "university": ["university", "school", "secondary_school", "primary_school", "college"],
+}
+
+# 실내/실외를 위한 카테고리값.
+INDOOR_TYPES = {
+    # 문화 및 예술
+    "art_gallery", "art_museum", "museum", "history_museum", "planetarium",
+    "cultural_center", "auditorium", "community_center", "convention_center", "art_studio",
+    "library", "library",
+
+    # 엔터테인먼트 (실내형)
+    "casino", "movie_theater", "movie_rental", "performing_arts_theater", 
+    "concert_hall", "philharmonic_hall", "opera_house", "amusement_center",
+    "aquarium", # 아쿠아리움은 대부분 실내이므로 추가
+
+    # 식음료 (전체)
+    "restaurant", "american_restaurant", "asian_restaurant", "chinese_restaurant", 
+    "french_restaurant", "italian_restaurant", "japanese_restaurant", "korean_restaurant", 
+    "mexican_restaurant", "thai_restaurant", "seafood_restaurant", "steak_house", 
+    "sushi_restaurant", "vietnamese_restaurant", "fine_dining_restaurant", "food_court",
+    "fast_food_restaurant", "pizza_restaurant", "hamburger_restaurant", "ramen_restaurant",
+    "cafe", "cat_cafe", "dog_cafe", "internet_cafe",
+    "bar", "pub", "wine_bar", "night_club", "cocktail_bar", "lounge_bar", "sports_bar",
+    "bakery", "cake_shop", "pastry_shop",
+    "coffee_shop", "tea_house", "juice_shop", "coffee_roastery",
+    "ice_cream_shop", "dessert_shop", "dessert_restaurant", "confectionery",
+
+    # 쇼핑 (전체)
+    "shopping_mall", "department_store", "hypermarket", "warehouse_store",
+    "clothing_store", "shoe_store", "jewelry_store", "womens_clothing_store", "sportswear_store",
+    "grocery_store", "supermarket", "gift_shop", "toy_store", "book_store", "duty_free_store",
+
+    # 종교 및 교육
+    "church", "mosque", "synagogue", "hindu_temple", "buddhist_temple", "shinto_shrine",
+    "university", "school", "secondary_school", "primary_school", "college",
+}
 
 # LLM에게 제공할 Schema
 class PlaceSearchInfo(BaseModel):
@@ -22,12 +130,10 @@ class PlaceSearchInfo(BaseModel):
         BaseModel: 엄격한 타입 제한.
     """
     # LLM 확인을 위한 Field
-    destination: str = Field(description="검색할 도시 또는 지역명(예: 부산, 서울, 타이페이)")
+    destination: str = Field(..., description="검색할 도시 또는 지역명(예: 부산, 서울, 타이페이)")
     styles: List[str] = Field(default=[], description="여행 스타일 목록(예: 카페, 명소, 관광지 등)")
     constraints: List[str] = Field(default=[], description="특별한 제약사항(예: 채식, 반려동물, 비, 우천)")
     limit: int = Field(default=10, description="추천받을 장소의 최대 개수")
-
-# def 
 
 @st.cache_data(ttl=3600)
 def get_places_from_api(destination: str, styles: List[str], constraints: List[str], limit: int) -> dict[str, any]:
@@ -48,10 +154,26 @@ def get_places_from_api(destination: str, styles: List[str], constraints: List[s
     url = "https://places.googleapis.com/v1/places:searchText"
     query = f"{destination} {' '.join(styles)} {' '.join(constraints)}"
     
+    # API를 통해 호출할 column
+    fields = [
+        "places.id",                        # 장소 ID
+        "places.displayName",               # 이름 {text, languageCode}
+        "places.location",                  # 장소 {latitude, longitude}
+        "places.primaryType",               # 대표 type
+        "places.primaryTypeDisplayName",    # 대표 타입명
+        "places.types",                     # 타입들
+        "places.priceLevel",                # 가격대 -> 찍히는지 확인
+        "places.priceRange",                # 가격대 {startPrice, endPrice}
+        "places.rating",                    # 평점
+        "places.reviews",                   # 리뷰정보
+        "places.reviewSummary"              # 안됨.   
+    ]
+
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": places_api_key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.primaryType,places.primaryTypeDisplayName,places.types,places.priceLevel,places.priceRange,places.rating,places.reviews,places.reviewSummary"
+        "X-Goog-FieldMask": ",".join(fields)
+
     }
     
     payload = {
@@ -86,6 +208,7 @@ def search_place_tool(destination: str, styles: List[str], constraints: List[str
                 실패 시 에러 메시지(error_text)를 포함한 딕셔너리.
     """
     try:
+        # print(f"DEBUG: [PLACE TOOL 호출]: {destination}, {styles}, {constraints}, {limit}")
         # TODO: API 호출 공통부로 구분 예정.
         # 특히 만약에 오류가 발생하거나, 정보가 부족한 경우 LLM이 지속적으로 호출해야할 수 있기 때문에 session 관리를 하는 util 함수 필요.
         response = get_places_from_api(destination, styles, constraints, limit)
@@ -99,6 +222,8 @@ def search_place_tool(destination: str, styles: List[str], constraints: List[str
             }
     
         results = response["json_data"].get("places", [])
+
+        # print(f"DEBUG: {results=}")
 
         # 테스트를 위한 코드 삽입(DELETE_CODE)
         if SAVE_FILE_TEST_MODE:
@@ -116,20 +241,18 @@ def search_place_tool(destination: str, styles: List[str], constraints: List[str
         # 결과값이 있을 때
         if len(results) > 0:
             for p in results:
-                types = p.get("types", [])
-                # TODO: 지금은 실내 여부 판별 로직을 간단하게 넣었는데, 이것도 따로 매핑하는 함수를 만들어야 함.
-                is_indoor = any(t in ["shopping_mall", "museum", "cafe"] for t in types)
+                # 장소 타입(원래는 types를 썼으나, primary_type으로 변환)
+                primary_type = p.get("primaryType", "")
 
                 temp_place_info = {
                     "place_id": p.get("id"),
                     "name": p.get("displayName", {}).get("text"),
                     "lat": p.get("location", {}).get("latitude"),
                     "lng": p.get("location", {}).get("longitude"),
-                    # TODO: types의 종류가 많아서, 간단하게 변경할 함수 생성
-                    "category": types[0] if types else "default",
-                    "summary": p.get("editorialSummary", {}).get("text", "정보 없음"),
+                    "category": next((k for k, cats in PLACE_CATEGORY_MAP.items() if primary_type in cats), "default"),
+                    "summary": p.get("reviewSummary", {}).get("text", "정보 없음"),
                     "rating": p.get("rating", 0),
-                    "indoor_outdoor": "indoor" if is_indoor else "outdoor",
+                    "indoor_outdoor": "indoor" if primary_type in INDOOR_TYPES else "outdoor",
                 }
 
                 mapped_places.append({
@@ -167,7 +290,7 @@ if __name__ == "__main__":
 
     # 함수호출에 필요한 값
     test_destination = "부산"
-    test_styles = ["맛집", "카페"]
+    test_styles = ["맛집", "동물원"]
     test_constraints = ["실내", "주차 가능"]
     
     print(f"--- '{test_destination}' 검색 테스트 시작 ---")
@@ -185,3 +308,4 @@ if __name__ == "__main__":
 
     # 결과 확인
     print(json.dumps(result, indent=4, ensure_ascii=False))
+  
