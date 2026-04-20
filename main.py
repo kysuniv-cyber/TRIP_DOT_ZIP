@@ -10,7 +10,7 @@ import os
 import traceback
 from dotenv import load_dotenv
 
-from llm.graph import build_trip_agent
+from agent_builder import build_agent
 
 load_dotenv()
 
@@ -86,7 +86,7 @@ def main():
     if not os.getenv("OPENAI_API_KEY"):
         raise ValueError("OPENAI_API_KEY가 .env에 설정되어 있지 않습니다.")
 
-    agent = build_trip_agent()
+    agent = build_agent()
 
     user_input = """
     내일 부산에서 1일 여행 일정 짜줘.

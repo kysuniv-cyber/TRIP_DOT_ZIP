@@ -1,8 +1,8 @@
 from langgraph.graph import StateGraph, END
-from state import TravelAgentState
-from routes import should_continue
+from llm.graph.state import TravelAgentState
+from llm.graph.routes import should_continue
 from llm.nodes.nodes_mock import route_intent_node
-from contracts import StateKeys # 규약 임포트
+from llm.graph.contracts import StateKeys # 규약 임포트
 
 # 1. 그래프 초기화
 workflow = StateGraph(TravelAgentState)
@@ -27,12 +27,12 @@ workflow.add_conditional_edges(
 )
 
 # 장소 검색 후 일정 생성으로 이어지는 흐름
-workflow.add_edge("place_nodes", "schedule_nodes")
+workflow.add_edge("place_node", "scheduler_node")
 
 # 4. 마무리
-workflow.add_edge("weather_nodes", "response_nodes")
-workflow.add_edge("schedule_nodes", "response_nodes")
-workflow.add_edge("response_nodes", END)
+workflow.add_edge("weather_node", "response_node")
+workflow.add_edge("scheduler_node", "response_node")
+workflow.add_edge("response_node", END)
 
 # 5. 컴파일
 app = workflow.compile()
