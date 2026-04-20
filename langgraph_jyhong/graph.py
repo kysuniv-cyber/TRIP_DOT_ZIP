@@ -1,3 +1,8 @@
+"""
+    FileName: graph.py
+    Location: langgraph_jyhong/graph.py
+    Role: graph
+"""
 from langgraph.graph import StateGraph, END
 from langgraph_jyhong.state import TempTravelAgentState
 from nodes import validate_travel_plan_node
@@ -20,8 +25,8 @@ workflow.add_node("validator", validate_travel_plan_node)
 
 
 # 에지 연결
-workflow.set_entry_point("search_places")
-workflow.add_edge("search_places", "validator")
+# workflow.set_entry_point("search_places")
+# workflow.add_edge("search_places", "validator")
 
 # 조건부 에지 추가
 workflow.add_conditional_edges(

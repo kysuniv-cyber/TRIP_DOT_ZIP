@@ -1,7 +1,10 @@
-# TempTravelAgentState
-# 여행 계획을 세우는 과정에서 필요한 정보를 담는 State 객체.
-# 단, 공유하기 전이므로 임시 상태.
-
+"""
+    FileName: state.py
+    Location: langgraph_jyhong/state.py
+    Role: TempTravelAgentState
+        여행 계획을 세우는 과정에서 필요한 정보를 담는 State 객체.
+        단, 공유하기 전이므로 임시 상태.
+""" 
 from typing import Annotated, List, TypedDict
 from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, END

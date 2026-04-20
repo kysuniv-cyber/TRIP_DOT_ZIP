@@ -1,6 +1,8 @@
-# validator.py
-# 검증자 노드: 여행 계획에 대한 검증 제공
-
+"""
+    FileName: validator.py
+    Location: langgraph_jyhong/nodes/validator.py
+    Role: 검증자 노드: 여행 계획에 대한 검증 제공
+"""
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph_jyhong.state import TempTravelAgentState, QualityCheck # QualityCheck는 테스트용
