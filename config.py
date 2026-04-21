@@ -14,6 +14,10 @@ class Settings:
     request_timeout: int = int(os.getenv("REQUEST_TIMEOUT", "15"))
     max_tool_rounds: int = int(os.getenv("MAX_TOOL_ROUNDS", "5"))
 
+    # 벡터 DB 설정
+    CHROMA_PERSIST_DIR: str = os.path.join(os.getcwd(), "db", "chroma_db")
+    CHROMA_COLLECTION_NAME: str = "place_reviews"
+
     def validate(self) -> None:
         if not self.openai_api_key:
             raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
