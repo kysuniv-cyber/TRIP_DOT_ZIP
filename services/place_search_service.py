@@ -1,6 +1,6 @@
 """
-    FileName: place_search_tool.py
-    Location: services/place_search_tool.py
+    FileName: place_search_service.py
+    Location: services/place_search_service.py
     Role: LLM에게 Destination 및 다른 제약조건이나 사용자의 선호도 조건을 받아서 
         Google Place API(NEW)를 호출해 장소 정보를 받아오는 역할
 """

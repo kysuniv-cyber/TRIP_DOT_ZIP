@@ -7,7 +7,7 @@ LLM 동작 검증을 위한 Schedule mock tool.
 """
 
 from langchain.tools import tool
-from llm.schemas import success_response
+from test_backup.schemas import success_response
 
 
 @tool

@@ -1,6 +1,6 @@
 # services/travel_recommend_service.py
 
-from services.place_search_tool import search_place_tool
+from services.place_search_service import search_place_tool
 
 
 def recommend_travel_places(query: str) -> dict:

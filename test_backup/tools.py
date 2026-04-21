@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from langchain.tools import tool
 
 # service 레이어 연결
-from services.place_search_tool import get_places_from_api
+from services.place_search_service import get_places_from_api
 from services.scheduler_service import create_schedule
 from services.weather_service import (
     build_weather_based_route_decision,

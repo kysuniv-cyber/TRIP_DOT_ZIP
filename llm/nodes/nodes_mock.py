@@ -1,7 +1,7 @@
 from llm.graph.state import TravelAgentState
 from llm.graph.contracts import StateKeys       # 규약 임포트
 from services.intent_service import classify_intent_by_rule
-from services.place_search_tool import search_place_tool
+from services.place_search_service import search_place_tool
 from services.scheduler_service import create_schedule
 
 # 1. 의도 분석 노드
@@ -30,7 +30,7 @@ def route_intent_node(state: TravelAgentState):
     }
 
 
-# 2. 장소 검색 노드 (place_search_tool.py 참고)
+# 2. 장소 검색 노드 (place_search_service.py 참고)
 def search_places_node(state: TravelAgentState):
     """
     State에 저장된 destination, styles, constraints를 꺼내서

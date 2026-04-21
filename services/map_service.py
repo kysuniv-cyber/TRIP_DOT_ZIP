@@ -1,6 +1,6 @@
 """
-    FileName: map_tool.py
-    Location: services/map_tool.py
+    FileName: map_service.py
+    Location: services/map_service.py
     Role: LLM에게 위치 좌표 정보를 받아서 map을 그리는 역할.
 """
 
