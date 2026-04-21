@@ -54,8 +54,21 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
     ]
 
     travel_keywords = [
-        "여행 추천", "여행지 추천", "국내 여행", "해외 여행", "여행 갈만한 곳",
-        "놀러 갈 곳", "추천해줘", "여행 어디", "여행"
+        "여행", "여행 추천", "여행지 추천", "국내 여행", "해외 여행",
+        "여행 갈만한 곳", "놀러 갈 곳", "추천해줘", "여행 어디",
+        "가려고", "가려", "갈거", "가고싶", "가고 싶", "놀러"
+    ]
+
+    duration_keywords = [
+        "부터", "까지",
+        "월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일",
+        "이번주", "다음주", "다다음주",
+        "오늘", "내일", "모레"
+    ]
+
+    city_keywords = [
+        "서울", "부산", "전주", "제주", "강릉", "속초", "경주", "여수",
+        "대구", "대전", "광주", "인천", "울산", "수원", "춘천", "포항", "목포"
     ]
 
     greeting_patterns = [
@@ -68,14 +81,8 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
         r"^hello+$",
     ]
 
-    has_modify = _contains_any(text, modify_keywords)
-    has_weather = _contains_any(text, weather_keywords)
-    has_schedule = _contains_any(text, schedule_keywords)
-    has_place = _contains_any(text, place_keywords)
-    has_travel = _contains_any(text, travel_keywords)
-
     # 1. 수정 요청 우선
-    if has_modify:
+    if _contains_any(text, modify_keywords):
         return {
             "intent": "modify_request",
             "confidence": 0.94,
@@ -83,8 +90,40 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "수정/변경 요청 키워드 감지",
         }
 
-    # 2. 일정 생성이 있으면 weather보다 우선
-    if has_schedule:
+    # 2. 기간 + 여행/도시 → 일정 생성
+    if ("부터" in text and "까지" in text) and (
+        _contains_any(text, travel_keywords) or _contains_any(text, city_keywords)
+    ):
+        return {
+            "intent": "schedule_generation",
+            "confidence": 0.95,
+            "route": "schedule",
+            "reason": "기간이 포함된 여행 요청 감지",
+        }
+
+    # 3. 여행/도시 + 요일/주차 표현 → 일정 생성
+    if (
+        (_contains_any(text, travel_keywords) or _contains_any(text, city_keywords))
+        and _contains_any(text, duration_keywords)
+    ):
+        return {
+            "intent": "schedule_generation",
+            "confidence": 0.93,
+            "route": "schedule",
+            "reason": "여행지 + 날짜/요일 표현 감지",
+        }
+
+    # 4. 날씨
+    if _contains_any(text, weather_keywords):
+        return {
+            "intent": "weather_query",
+            "confidence": 0.95,
+            "route": "weather",
+            "reason": "날씨 관련 키워드 감지",
+        }
+
+    # 5. 일정 명시 키워드
+    if _contains_any(text, schedule_keywords):
         return {
             "intent": "schedule_generation",
             "confidence": 0.93,
@@ -92,8 +131,8 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "일정 생성 관련 키워드 감지",
         }
 
-    # 3. 장소 검색도 weather보다 우선
-    if has_place:
+    # 6. 장소 검색
+    if _contains_any(text, place_keywords):
         return {
             "intent": "place_search",
             "confidence": 0.90,
@@ -101,22 +140,13 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "장소 검색 관련 키워드 감지",
         }
 
-    # 4. 여행 추천도 weather보다 우선
-    if has_travel:
+    # 7. 일반 여행 추천
+    if _contains_any(text, travel_keywords):
         return {
             "intent": "travel_recommendation",
             "confidence": 0.89,
             "route": "travel",
             "reason": "여행 추천 관련 키워드 감지",
-        }
-
-    # 5. 날씨는 단독 질문일 때만 처리
-    if has_weather and not (has_schedule or has_place or has_travel):
-        return {
-            "intent": "weather_query",
-            "confidence": 0.95,
-            "route": "weather",
-            "reason": "날씨 단독 질의로 판단",
         }
 
     for pattern in greeting_patterns:

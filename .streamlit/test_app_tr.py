@@ -19,7 +19,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 
 from llm.prompts import SYSTEM_PROMPT
 from test_backup.proto import parse_buttons
-from test_backup.agent_builder import agent
+from agent_builder import agent
 
 load_dotenv(ROOT_DIR / ".env")
 

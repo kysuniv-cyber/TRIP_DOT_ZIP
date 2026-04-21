@@ -464,56 +464,110 @@ def build_weather_based_route_decision(city_name: str, travel_date: str | None =
 # -----------------------------
 # 7. 날짜 계산 (상대 → 절대)
 # -----------------------------
-from datetime import date, datetime, timedelta
+# from datetime import date, datetime, timedelta
+#
+#
+# def resolve_travel_date(
+#     travel_date: str | None,
+#     relative_days: int | None,
+#     raw_date_text: str | None = None,
+# ) -> str | None:
+#     """
+#     절대 날짜 또는 상대 날짜 또는 자연어 날짜를 최종 여행 날짜로 변환한다.
+#     """
+#
+#     today = date.today()
+#
+#     weekday_map = {
+#         "월요일": 0,
+#         "화요일": 1,
+#         "수요일": 2,
+#         "목요일": 3,
+#         "금요일": 4,
+#         "토요일": 5,
+#         "일요일": 6,
+#     }
+#
+#     def _resolve_korean_relative_weekday(today: date, text: str) -> str | None:
+#         text = text.replace(" ", "")
+#
+#         for day_name, target_weekday in weekday_map.items():
+#             if text == f"이번주{day_name}":
+#                 days_until = (target_weekday - today.weekday()) % 7
+#                 return (today + timedelta(days=days_until)).isoformat()
+#
+#             if text == f"다음주{day_name}":
+#                 days_until = (target_weekday - today.weekday()) % 7
+#                 return (today + timedelta(days=days_until + 7)).isoformat()
+#
+#             if text == f"다다음주{day_name}":
+#                 days_until = (target_weekday - today.weekday()) % 7
+#                 return (today + timedelta(days=days_until + 14)).isoformat()
+#
+#         return None
+#
+#     # 1. 이미 절대 날짜가 있는 경우
+#     if travel_date:
+#         try:
+#             parsed = datetime.strptime(travel_date, "%Y-%m-%d").date()
+#             return parsed.isoformat()
+#         except ValueError:
+#             pass
+#
+#     # 2. n일 뒤 형태
+#     if relative_days is not None:
+#         return (today + timedelta(days=relative_days)).isoformat()
+#
+#     # 3. 자연어 날짜 처리
+#     if raw_date_text:
+#         text = raw_date_text.strip().replace(" ", "")
+#
+#         if text == "오늘":
+#             return today.isoformat()
+#
+#         if text == "내일":
+#             return (today + timedelta(days=1)).isoformat()
+#
+#         if text == "모레":
+#             return (today + timedelta(days=2)).isoformat()
+#
+#         resolved_weekday = _resolve_korean_relative_weekday(today, text)
+#         if resolved_weekday:
+#             return resolved_weekday
+#
+#     return None
 
+from datetime import date, timedelta
 
-def resolve_travel_date(
-    travel_date: str | None,
-    relative_days: int | None,
-    raw_date_text: str | None = None,
-) -> str | None:
-    """
-    절대 날짜 또는 상대 날짜 또는 자연어 날짜를 최종 여행 날짜로 변환한다.
-    """
+def fallback_resolve_date_with_rules(raw_text: str | None) -> str | None:
+    if not raw_text:
+        return None
 
     today = date.today()
+    text = raw_text.replace(" ", "")
 
-    # 1. 이미 절대 날짜가 있는 경우
-    if travel_date:
-        try:
-            parsed = datetime.strptime(travel_date, "%Y-%m-%d").date()
-            return parsed.isoformat()
-        except ValueError:
-            pass
+    weekday_map = {
+        "월요일": 0,
+        "화요일": 1,
+        "수요일": 2,
+        "목요일": 3,
+        "금요일": 4,
+        "토요일": 5,
+        "일요일": 6,
+    }
 
-    # 2. n일 뒤 형태
-    if relative_days is not None:
-        return (today + timedelta(days=relative_days)).isoformat()
+    for day_name, target_weekday in weekday_map.items():
+        if text == f"이번주{day_name}":
+            days = (target_weekday - today.weekday()) % 7
+            return (today + timedelta(days=days)).isoformat()
 
-    # 3. 자연어 날짜 처리 (🔥 핵심 추가)
-    if raw_date_text:
-        text = raw_date_text.strip().replace(" ", "")
+        if text == f"다음주{day_name}":
+            days = (target_weekday - today.weekday()) % 7
+            return (today + timedelta(days=days + 7)).isoformat()
 
-        if text == "오늘":
-            return today.isoformat()
-
-        if text == "내일":
-            return (today + timedelta(days=1)).isoformat()
-
-        if text == "모레":
-            return (today + timedelta(days=2)).isoformat()
-
-        if text == "다음주토요일":
-            target_weekday = 5  # 토요일
-            days_until_this_sat = (target_weekday - today.weekday()) % 7
-            next_week_sat = today + timedelta(days=days_until_this_sat + 7)
-            return next_week_sat.isoformat()
-
-        if text == "이번주토요일":
-            target_weekday = 5
-            days_until_sat = (target_weekday - today.weekday()) % 7
-            this_week_sat = today + timedelta(days=days_until_sat)
-            return this_week_sat.isoformat()
+        if text == f"다다음주{day_name}":
+            days = (target_weekday - today.weekday()) % 7
+            return (today + timedelta(days=days + 14)).isoformat()
 
     return None
 
@@ -531,45 +585,77 @@ def extract_trip_info_with_llm(user_prompt: str) -> dict:
     Returns:
         dict: 추출 결과
     """
-    extraction_system_prompt = f"""
-당신은 여행 정보 추출기입니다.
-오늘 날짜는 {date.today().isoformat()} 입니다.
 
-사용자 문장에서 아래 JSON 형식으로만 추출하세요.
-설명 없이 JSON만 출력하세요.
+    extraction_system_prompt = """
+    당신은 여행 정보 추출기입니다.
+    오늘 날짜는 2026-04-20 입니다.
+    오늘은 월요일입니다.
 
-규칙:
-1. city_name은 가능하면 한국어 도시명으로 반환하세요. 예: 서울, 부산, 도쿄, 전주
-2. 날짜가 YYYY-MM-DD처럼 명확하면 travel_date에 넣으세요.
-3. '1주일 뒤', '3일 후', '내일', '모레'처럼 상대 날짜면 relative_days에 숫자로 넣으세요.
-4. 날짜를 특정할 수 없으면 travel_date와 relative_days를 모두 null로 두세요.
-5. "다음 주", "이번 여름", "가을쯤"처럼 애매하면 둘 다 null로 두세요.
+    사용자 문장에서 여행 도시와 날짜를 추출하세요.
+    반드시 JSON만 출력하세요.
 
-출력 형식:
-{{
-  "city_name": "서울",
-  "travel_date": null,
-  "relative_days": null,
-  "raw_date_text": null
-}}
-"""
+    규칙:
+    1. city_name은 한국어 도시명으로 반환하세요.
+    2. "다음주 목요일", "다다음주 토요일", "내일", "모레" 같은 상대 날짜는
+       반드시 절대 날짜 YYYY-MM-DD로 계산해서 travel_date에 넣으세요.
+    3. 기간 표현이면 시작일은 travel_date, 종료일은 end_date에 넣으세요.
+    4. 계산이 불가능하면 travel_date는 null로 두고 raw_date_text에 원문을 넣으세요.
 
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[
-            {"role": "system", "content": extraction_system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
+    출력 형식:
+    {
+      "city_name": "부산",
+      "travel_date": "2026-04-30",
+      "end_date": null,
+      "raw_date_text": "다음주 목요일"
+    }
+    """
 
-    content = response.choices[0].message.content
-    return json.loads(content)
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": extraction_system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
 
+        content = response.choices[0].message.content
+        print("DEBUG extract_trip_info_with_llm raw content =", content)
 
+        if not content:
+            return {
+                "city_name": None,
+                "travel_date": None,
+                "end_date": None,
+                "raw_date_text": user_prompt,
+            }
+
+        parsed = json.loads(content)
+
+        if not isinstance(parsed, dict):
+            return {
+                "city_name": None,
+                "travel_date": None,
+                "end_date": None,
+                "raw_date_text": user_prompt,
+            }
+
+        return parsed
+
+    except Exception as e:
+        print("DEBUG extract_trip_info_with_llm exception =", e)
+        return {
+            "city_name": None,
+            "travel_date": None,
+            "end_date": None,
+            "raw_date_text": user_prompt,
+        }
 # -----------------------------
 # 9. 자연어 입력 → 최종 결과
 # -----------------------------
 def build_weather_route_from_user_prompt(user_prompt: str) -> dict:
+    extracted = extract_trip_info_with_llm(user_prompt)
     """
     사용자 자연어 입력을 받아 도시/날짜를 추출하고 최종 날씨 기반 추천 결과를 반환한다.
 
@@ -579,18 +665,18 @@ def build_weather_route_from_user_prompt(user_prompt: str) -> dict:
     Returns:
         dict: 추출 결과와 날씨 추천 결과
     """
-    extracted = extract_trip_info_with_llm(user_prompt)
 
     display_city_name = extracted.get("city_name") or "서울"
     api_city_name = normalize_city_name_for_weather(display_city_name)
 
-    travel_date = resolve_travel_date(
-        extracted.get("travel_date"),
-        extracted.get("relative_days"),
-        extracted.get("raw_date_text"),
-    )
-    print("DEBUG extracted:", extracted)
-    print("DEBUG resolved date:", travel_date)
+    travel_date = extracted.get("travel_date")
+    end_date = extracted.get("end_date")
+
+    # fallback
+    if not travel_date:
+        travel_date = fallback_resolve_date_with_rules(
+            extracted.get("raw_date_text")
+        )
 
     result = build_weather_based_route_decision(api_city_name, travel_date)
     result["display_city_name"] = display_city_name

@@ -24,7 +24,7 @@ from test_backup.mock_tools import get_weather_from_prompt
 
 from llm.prompts import SYSTEM_PROMPT
 from test_backup.proto import parse_buttons
-from test_backup.agent_builder import agent
+from agent_builder import agent
 
 load_dotenv(ROOT_DIR / ".env")
 
