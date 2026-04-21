@@ -10,6 +10,7 @@ from typing import List
 from config import Settings
 import requests
 from llm.graph.contracts import StateKeys
+from utils.db_util import run_pipeline
 
 # API KEY
 PLACES_API_KEY = Settings.places_api_key
@@ -82,15 +83,6 @@ def get_places_by_api(destination:str, search_task:List[dict]):
     else: 
         pass
 
-def prepare_for_vector_db(raw_places:List[dict]):
-    """ Vector DB를 위한 데이터 전처리 """
-    # print(raw_places)
-    for raw_place in raw_places:
-        print(raw_place.get("id"))
-        
-    
-
-
 def place_node(state: TravelAgentState):
     print(f'Debug: place_node {state}')
 
@@ -115,13 +107,13 @@ def place_node(state: TravelAgentState):
 
     # api_result가 성공일 경우
     if api_result["status_code"] == 200:
-        
-        # 1. 데이터 전처리
-        prepare_for_vector_db(api_result.get("json_data").get('places'))
-
-        # 2. vector db 적재
-
-        # 3. state 상태값 return
+    
+        result_chunk = run_pipeline(
+            raw_data=api_result["json_data"]["places"], 
+            chroma_dir=Settings.CHROMA_PERSIST_DIR, 
+            collection_name=Settings.CHROMA_COLLECTION_NAME, 
+            test_flag=True
+        )
 
     # api_result가 실패
     else:

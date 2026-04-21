@@ -10,10 +10,11 @@ import streamlit as st
 from pydantic import BaseModel, Field
 from langchain.tools import tool
 from typing import List
+from config import Settings
 
 import os
 import requests
-from sympy import re
+import re
 from utils.custom_exception import PlaceNotFoundError
 from config import Settings
 import json
@@ -24,6 +25,10 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 import hashlib
+import chromadb
+
+# 전처리 완료된 청크를 저장 여부.
+SAVE_FILE_TEST_MODE = False
 
 KEYWORD_DICT = {
     "청결": ["깔끔", "청결", "위생", "냄새", "깨끗"],
@@ -52,6 +57,7 @@ class PlaceReviewChunkInfo:
     # 식별자
     chunk_id: str
     place_id: str
+    review_name: str
 
     # 임베딩 대상 텍스트
     text_for_embedding: str # 전처리 완료 텍스트
@@ -87,13 +93,13 @@ class PlaceReviewChunkInfo:
         # dict 형태로 변환
         meta = asdict(self)
 
-        text = meta.pop("text_for_embedding")  # 임베딩 대상 텍스트는 별도 분리
+        text = meta.pop("text_for_embedding")   # 임베딩 대상 텍스트는 별도 분리
         cid = meta.pop("chunk_id")              # chunk_id는 Chroma의 id로 사용
 
         # raw_text는 용량초과 시 제외
         meta.pop("raw_text")
 
-        return {id: cid, "document": text, "metadata": meta}
+        return {"id": cid, "document": text, "metadata": meta}
 
 class OpenAIEmbedder():
     """
@@ -101,10 +107,10 @@ class OpenAIEmbedder():
     """
     def __init__(self, model: str = "text-embedding-3-small"):
         self.model = model
-        self.embeddings_model = OpenAIEmbeddings(
+        self.client = OpenAIEmbeddings(
             model=self.model,
             # batch_size를 생성자에서 지정할 수도 있습니다. (기본값 1024)
-            chunk_size=100 
+            chunk_size=1024
         )
     
     def embed_batch(self, texts: list[str], batch_size: int=100) -> List[List]:
@@ -117,34 +123,29 @@ class OpenAIEmbedder():
             all_embeddings.extend([r.embedding for r in response.data])
             print(f"  임베딩 완료: {min(i + batch_size, len(texts))}/{len(texts)}")
         return all_embeddings
-
-
-def preprocess_place_data(raw_data: dict) -> List[dict]:
-    """ Google Places API로부터 받은 원본 장소 데이터를 LLM이 활용하기 쉬운 형태로 가공함.
-
-        원본 데이터에서 장소 ID, 이름, 위치, 카테고리, 평점, 리뷰 요약 등을 추출하여 
-        카테고리를 사전에 정의된 단순화된 카테고리로 매핑함.
-
-        Args:
-            raw_data (dict): Google Places API로부터 받은 원본 장소 데이터
-
-        Returns:
-            List[dict]: 가공된 장소 정보 리스트. 각 장소는 ID, 이름, 위도/경도, 단순화된 카테고리, 평점, 실내외 여부 등을 포함함.
+    
+class ChromaDBHandler():
     """
-    mapped_places = []
-    for p in raw_data.get("places", []):
-        primary_type = p.get("primaryType", "")
-        mapped_places.append({
-            "place_id": p.get("id"),
-            "name": p.get("displayName", {}).get("text"),
-            "lat": p.get("location", {}).get("latitude"),
-            "lng": p.get("location", {}).get("longitude"),
-            "category": next((k for k, cats in PLACE_CATEGORY_MAP.items() if primary_type in cats), "default"),
-            "summary": p.get("reviewSummary", {}).get("text", "정보 없음"),
-            "rating": p.get("rating", 0),
-            # "indoor_outdoor": "indoor" if primary_type in INDOOR_TYPES else "outdoor",
-        })
-    return mapped_places
+    """
+    def __init__(self, collection_name: str = Settings.CHROMA_COLLECTION_NAME, persist_dir: str=Settings.CHROMA_PERSIST_DIR):
+        """ Chroma DB 연결 및 컬렉션 초기화 """
+        self.client = chromadb.PersistentClient(path=persist_dir)
+        self.collection = self.client.get_or_create_collection(
+            name=collection_name,
+            metadata={
+                "hnsw:space": "cosine",     # 코사인 유사도 사용
+                #sw:dim": 1536            # 차원 수는 임베딩 모델에 맞게 설정 임베딩 모델에 맞게 변경(chromadb는 첫 insert시 자동 감지)
+            } # 
+        )
+    def upsert(self, chunks: List[PlaceReviewChunkInfo], embeddings: List[List[float]]):
+        """ 청크 리스트를 받아 Chroma DB에 일괄 적재 """
+        docs = [c.to_chroma_doc() for c in chunks]
+        self.collection.upsert(
+            ids        = [d["id"]       for d in docs],
+            documents  = [d["document"] for d in docs],
+            metadatas  = [d["metadata"] for d in docs],
+            embeddings = embeddings,
+        )
 
 def make_chunk_id(place_id: str, review_name: str) -> str:
     """ 장소 ID에 hash 함수를 적용하여 고유한 청크 ID를 생성함. 
@@ -194,7 +195,7 @@ def parse_place_data(raw_data: dict) -> List[PlaceReviewChunkInfo]:
     for place in raw_data: 
         place_id   = place["id"]
         place_name = place["displayName"]["text"]
-        place_type = next((k for k, cats in PLACE_CATEGORY_MAP.items() if place["primary_type"] in cats), "default"),
+        place_type = next((k for k, cats in PLACE_CATEGORY_MAP.items() if place["primaryType"] in cats), "default")
         place_rating = float(place.get("rating", 0))
         lat = place["location"]["latitude"]
         lng = place["location"]["longitude"]
@@ -235,11 +236,42 @@ def parse_place_data(raw_data: dict) -> List[PlaceReviewChunkInfo]:
  
     return chunks
 
-def run_pipeline(raw_data: List[dict], dry_run: bool=False) -> List[PlaceReviewChunkInfo]:
+def run_pipeline(
+        raw_data: List[dict], 
+        chroma_dir: str=Settings.CHROMA_PERSIST_DIR, 
+        collection_name: str=Settings.CHROMA_COLLECTION_NAME, 
+        test_flag: bool=False
+    ) -> List[PlaceReviewChunkInfo]:
+    
     print(f'DEBUG: {raw_data}')
+    # test_flag 적재 없이 전처리만 확인 가능한 파일 생성.
 
     # 1. 파싱 및 전처리
     chunks = parse_place_data(raw_data)
 
-    # 2. 임베딩
+    # test_flag가 True인 경우, 전처리된 청크의 샘플을 출력하고 함수 종료
+    if test_flag:
+        print("\n[test_flag]] 전처리 결과 샘플:")
+        for c in chunks[:2]:
+            print(f"\n  chunk_id     : {c.chunk_id}")
+            print(f"  place_name   : {c.place_name}")
+            print(f"  embedding_text: {c.text_for_embedding[:80]}...")
+        return chunks
     
+    # 파일 저장모드. 전처리된 청크샘플 저장.
+    if SAVE_FILE_TEST_MODE:
+        with open("./data/preprocessed_chunks_sample.json", "w", encoding="utf-8") as f:
+            json.dump([asdict(c) for c in chunks[:10]], f, ensure_ascii=False, indent=2)
+        print("전처리된 청크 샘플을 ./data/preprocessed_chunks_sample.json에 저장했습니다.")
+
+    # 2. 임베딩
+    embedder = OpenAIEmbedder()
+    texts = [c.text_for_embedding for c in chunks]
+    embeddings = embedder.embed_batch(texts)
+    print(f"임베딩된 {len(embeddings)}개 텍스트")
+
+    # 3. Chroma DB 적재
+    dbHandler = ChromaDBHandler(collection_name=collection_name, persist_dir=chroma_dir)
+    dbHandler.upsert(chunks, embeddings)
+    
+    return chunks
