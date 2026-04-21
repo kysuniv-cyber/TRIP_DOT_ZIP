@@ -91,7 +91,19 @@ def _extract_constraints(user_text: str) -> list[str]:
 
 
 # -----------------------------
-# 내부 헬퍼: 시작 시간 추출
+# 내부 헬퍼: 여행 날짜 추출
+# -----------------------------
+def _extract_travel_date(user_text: str) -> str | None:
+    """
+    사용자 입력에서 YYYY-MM-DD 형식 날짜를 단순 추출합니다.
+    :param user_text:
+    :return:
+    """
+
+
+
+# -----------------------------
+# 내부 헬퍼: 일정 시작 시간 추출
 # -----------------------------
 def _extract_start_time(user_text: str) -> str | None:
     """
@@ -211,6 +223,8 @@ def check_missing_info_node(state: TravelAgentState) -> dict:
     if not destination:
         missing_slots.append(StateKeys.DESTINATION)
 
+    print("[DEBUG] check_missing_info_node missing_slots =", missing_slots)
+
     return {StateKeys.MISSING_SLOTS: missing_slots}
 
 
@@ -219,21 +233,46 @@ def check_missing_info_node(state: TravelAgentState) -> dict:
 # -----------------------------
 def ask_user_for_missing_info_node(state: TravelAgentState) -> dict:
     """
-    부족한 정보(missing_slots)를 바탕으로 사용자에게 다시 질문할 문장을 생성합니다.
+    부족한 정보가 있을 때 사용자에게 다시 질문할 문장을 생성합니다.
 
-    현재는 final_response에 질문 문장을 넣는 단순 구조입니다.
-    추후에는 별도 ask_back_question 같은 state key로 분리할 수 있습니다.
+    현재 1차 버전에서는 destination만 필수로 간주합니다.
     """
-    missing_slots = state.get(StateKeys.MISSING_SLOTS, [])
+    destination = state.get(StateKeys.DESTINATION)
 
-    if not missing_slots:
-        return {}
+    if not destination:
+        return {StateKeys.FINAL_RESPONSE: "어느 지역으로 여행 일정을 짜드릴까요?"}
 
-    questions = []
+    return {}
 
-    if StateKeys.DESTINATION in missing_slots:
-        questions.append("어느 지역으로 여행 일정을 짜드릴까요?")
 
-    question_text = " ".join(questions) if questions else "추가로 필요한 정보를 알려주세요."
+# -----------------------------
+# 메인 노드 4: 사용자가 선택한 장소 저장
+# -----------------------------
+def select_places_node(state: TravelAgentState) -> dict:
+    """
+    장소 후보(mapped_places) 중 실제 일정 생성에 사용할 selected_places를 결정하는 노드입니다.
 
-    return {StateKeys.FINAL_RESPONSE: question_text}
+    현재 1차 버전:
+    - 사용자가 이미 selected_places를 골라둔 경우: 그 값을 그대로 사용
+    - 아직 고르지 않은 경우: mapped_places 상위 3개를 임시 선택
+
+    추후 확장:
+    - 사용자 응답에서 place_id / 장소명 기반 선택 반영
+    - 카테고리 다양성 고려
+    - 필수 카테고리(카페/맛집 등) 균형 선택
+    """
+    # 이미 사용자 선택 결과가 있으면 그대로 사용
+    existing_selected = state.get(StateKeys.SELECTED_PLACES, [])
+    if existing_selected:
+        return {StateKeys.SELECTED_PLACES: existing_selected}
+
+    mapped_places = state.get(StateKeys.MAPPED_PLACES, [])
+    if not mapped_places:
+        return {StateKeys.SELECTED_PLACES: []}
+
+    # 1차 버전: 상위 3개만 임시 선택
+    selected_places = mapped_places[:3]
+
+    print("[DEBUG] selected_places =", selected_places)
+
+    return {StateKeys.SELECTED_PLACES: selected_places}

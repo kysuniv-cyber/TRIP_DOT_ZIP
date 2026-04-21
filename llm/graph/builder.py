@@ -2,9 +2,10 @@ from langgraph.graph import StateGraph, END
 from llm.graph.state import TravelAgentState
 from llm.graph.routes import should_continue, route_after_missing_check
 from llm.nodes.intent_nodes import route_intent_node
-from llm.nodes.trip_nodes import extract_trip_requirements_node, check_missing_info_node, ask_user_for_missing_info_node
+from llm.nodes.trip_nodes import extract_trip_requirements_node, check_missing_info_node, ask_user_for_missing_info_node, select_places_node
+from llm.nodes.weather_nodes import weather_node
 from llm.nodes.response_nodes import build_response_node
-from llm.nodes.nodes_mock import search_places_node, scheduler_node, weather_node       # mock node 등록해서 돌아가는지 확인
+from llm.nodes.nodes_mock import search_places_node, scheduler_node       # mock node 등록해서 돌아가는지 확인
 from llm.graph.contracts import StateKeys # 규약 임포트
 
 # 1. 그래프 초기화
@@ -20,6 +21,7 @@ workflow.add_node("response_node", build_response_node) # 최종 답변 노드
 
 # 일단 확인용 mock node 추가
 workflow.add_node("place_node", search_places_node)
+workflow.add_node("select_places_node", select_places_node)     # 장소 선택 노드
 workflow.add_node("scheduler_node", scheduler_node)
 workflow.add_node("weather_node", weather_node)
 
@@ -46,8 +48,9 @@ workflow.add_conditional_edges(
     }
 )
 
-# 장소 검색 후 일정 생성으로 이어지는 흐름
-workflow.add_edge("place_node", "scheduler_node")
+# 장소 검색 -> 장소 선택 -> 일정 생성
+workflow.add_edge("place_node", "select_places_node")
+workflow.add_edge("select_places_node", "scheduler_node")
 
 # ask_user는 질문을 만든 뒤 종료
 workflow.add_edge("ask_user_node", END)

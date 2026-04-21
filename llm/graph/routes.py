@@ -33,13 +33,17 @@ def should_continue(state: TravelAgentState):
 
 def route_after_missing_check(state: TravelAgentState):
     """
-    missing_slots 존재 여부에 따라 다음 노드를 결정합니다.
+    부족한 정보 여부에 따라 다음 노드를 결정합니다.
 
-    - missing_slots가 있으면 사용자에게 질문
-    - 없으면 원래 route 기준으로 다음 단계 진행
+    현재 1차 버전에서는 destination만 필수로 간주하므로,
+    destination이 없으면 ask_user_node로 보내고,
+    있으면 기존 route 기준으로 다음 단계 진행합니다.
     """
-    missing_slots = state.get(StateKeys.MISSING_SLOTS, [])
-    if missing_slots:
+    destination = state.get(StateKeys.DESTINATION)
+
+    print("[DEBUG] route_after_missing_check destination =", destination)
+
+    if not destination:
         return "ask_user_node"
 
     return should_continue(state)

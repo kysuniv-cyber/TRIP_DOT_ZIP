@@ -22,6 +22,7 @@ class StateKeys:
     # 일정/날씨 영역
     ITINERARY = "itinerary"
     WEATHER_DATA = "weather_data"
+    TRAVEL_DATES = "travel_dates"
 
     # 대화형 흐름 확장용
     NEED_WEATHER = "need_weather"           # 날씨 조회 필요 여부

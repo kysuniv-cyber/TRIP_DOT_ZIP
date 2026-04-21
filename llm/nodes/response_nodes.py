@@ -9,9 +9,10 @@ def build_response_node(state: TravelAgentState) -> dict:
     """
     # 1. 데이터 가져오기
     weather = state.get(StateKeys.WEATHER_DATA)
-    places = state.get(StateKeys.MAPPED_PLACES, [])
     itinerary = state.get(StateKeys.ITINERARY, [])
     destination = state.get(StateKeys.DESTINATION, "요청하신 지역")
+    selected_places = state.get(StateKeys.SELECTED_PLACES, [])
+    places = selected_places or state.get(StateKeys.MAPPED_PLACES, [])      # 장소를 보여줄 때 선택된 장소를 우선 순위에 놓고 보여주도록 함.
 
     # 2. 답변 시나리오 구성
     response_text = ""
