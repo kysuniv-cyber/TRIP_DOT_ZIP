@@ -1,3 +1,19 @@
+"""
+ui.py
+
+Streamlit 기반 여행 추천 챗봇의 사용자 인터페이스(UI) 렌더링을 담당하는 모듈이다.
+
+주요 역할:
+- CSS 로드
+- 프로필 입력 폼 렌더링
+- 채팅 메시지 UI 렌더링
+- 사이드바 정보/미리보기 렌더링
+- 사용자 입력창(chat_input) 처리
+
+이 모듈은 화면 표시 전용 레이어로,
+실제 대화 처리 로직은 chat_logic.py,
+상태 관리는 session_state.py에서 담당한다.
+"""
 from __future__ import annotations
 
 import base64
@@ -12,6 +28,9 @@ from streamlit_app.back.session_state import (
 )
 from streamlit_app.back.chat_logic import get_mock_preview, process_user_input
 
+# =========================
+# 경로 설정
+# =========================
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
@@ -20,6 +39,15 @@ MOUSE_ICON_IMAGE = ROOT_DIR / "assets" / "tripdotzip_mouse_icon.png"
 
 
 def load_css() -> None:
+    """
+    Streamlit 앱에 CSS 스타일 파일을 로드한다.
+
+    우선 front 폴더의 tripdotzip.css를 찾고,
+    없으면 루트 경로의 css 파일을 fallback으로 사용한다.
+
+    Returns:
+        None
+    """
     css_path = ROOT_DIR / "front" / "tripdotzip.css"
     if not css_path.exists():
         css_path = ROOT_DIR / "tripdotzip.css"
@@ -32,6 +60,15 @@ def load_css() -> None:
 
 @st.cache_data
 def image_data_uri(path_text: str) -> str:
+    """
+    이미지 파일을 base64 data URI 문자열로 변환한다.
+
+    Args:
+        path_text (str): 이미지 파일 경로 문자열
+
+    Returns:
+        str: HTML img 태그에 사용할 data URI 문자열
+    """
     path = Path(path_text)
     if not path.exists():
         return ""
@@ -40,6 +77,15 @@ def image_data_uri(path_text: str) -> str:
 
 
 def render_profile_setup() -> None:
+    """
+    사용자 프로필 입력 폼을 렌더링한다.
+
+    사용자가 여행 선호도, 동행자, 스타일 등을 입력하면
+    session_state.user_profile에 저장하고 채팅 시작 상태로 전환한다.
+
+    Returns:
+        None
+    """
     st.markdown(
         """
         <div class="chat-header">
@@ -109,6 +155,15 @@ def render_profile_setup() -> None:
 
 
 def render_message(message: dict) -> None:
+    """
+    채팅 메시지 한 개를 버블 형태로 렌더링한다.
+
+    Args:
+        message (dict): role, content, time 정보를 담은 메시지 딕셔너리
+
+    Returns:
+        None
+    """
     role = message["role"]
     wrapper_class = "user" if role == "user" else ""
     avatar_class = "user" if role == "user" else "bot"
@@ -132,6 +187,13 @@ def render_message(message: dict) -> None:
 
 
 def render_loading_message() -> None:
+    """
+    챗봇이 응답을 생성하는 동안 표시할 로딩 UI를 렌더링한다.
+
+    Returns:
+        None
+    """
+
     image_src = image_data_uri(str(GUIDE_MOUSE_IMAGE))
     st.markdown(
         f"""
@@ -154,6 +216,17 @@ def render_loading_message() -> None:
 
 
 def render_info_card(icon: str, label: str, value: str) -> None:
+    """
+    사이드바 정보 카드를 렌더링한다.
+
+    Args:
+        icon (str): 카드 아이콘
+        label (str): 카드 제목
+        value (str): 카드 값
+
+    Returns:
+        None
+    """
     st.markdown(
         f"""
         <div class="info-card">
@@ -169,6 +242,16 @@ def render_info_card(icon: str, label: str, value: str) -> None:
 
 
 def render_history_item(title: str, day: str) -> None:
+    """
+    지난 여행 기록 카드 한 개를 렌더링한다.
+
+    Args:
+        title (str): 여행 제목
+        day (str): 여행 날짜
+
+    Returns:
+        None
+    """
     st.markdown(
         f"""
         <div class="history-card">
@@ -181,6 +264,12 @@ def render_history_item(title: str, day: str) -> None:
 
 
 def render_mock_preview() -> None:
+    """
+    사이드바용 1차 추천 미리보기를 렌더링한다.
+
+    Returns:
+        None
+    """
     preview = get_mock_preview()
     weather_data = (
         preview["weather"].get("data", {})
@@ -209,6 +298,20 @@ def render_mock_preview() -> None:
 
 
 def render_left_panel() -> None:
+    """
+    Streamlit 사이드바 전체를 렌더링한다.
+
+    포함 내용:
+    - 브랜드 영역
+    - 현재 여행 조건
+    - 사용자 프로필
+    - 1차 추천 미리보기
+    - 지난 여행 계획
+    - 초기화 버튼
+
+    Returns:
+        None
+    """
     info = st.session_state.trip_info
     mouse_icon = image_data_uri(str(MOUSE_ICON_IMAGE))
 
@@ -225,12 +328,14 @@ def render_left_panel() -> None:
         unsafe_allow_html=True,
     )
 
+    # 현재 입력된 여행 조건
     st.markdown('<div class="side-title">나의 현재 여행 조건</div>', unsafe_allow_html=True)
     render_info_card("P", "목적지", info["destination"])
     render_info_card("D", "여행 날짜", info["date"])
     render_info_card("N", "인원", info["people"])
     render_info_card("S", "여행 스타일", info["style"])
 
+    # 사용자 프로필 정보
     profile = st.session_state.get("user_profile", {})
     if profile:
         st.markdown('<div class="side-title">나의 프로필</div>', unsafe_allow_html=True)
@@ -244,18 +349,27 @@ def render_left_panel() -> None:
             reset_user_profile()
             st.rerun()
 
+    # 미리보기 영역
     render_mock_preview()
 
+    # 지난 여행 기록
     st.markdown('<div class="side-title">지난 여행 계획</div>', unsafe_allow_html=True)
     for title, day in st.session_state.history_items:
         render_history_item(title, day)
 
+    # 대화 초기화 버튼
     if st.button("대화 초기화", use_container_width=True):
         reset_session_state()
         st.rerun()
 
 
 def render_intro() -> None:
+    """
+    채팅 시작 전 인트로 헤더를 렌더링한다.
+
+    Returns:
+        None
+    """
     if st.session_state.messages:
         return
 
@@ -271,14 +385,29 @@ def render_intro() -> None:
 
 
 def render_chat_area() -> None:
+    """
+    메인 채팅 영역을 렌더링한다.
+
+    포함 내용:
+    - 인트로 헤더
+    - 채팅 메시지 목록
+    - 빠른 선택 버튼
+    - 사용자 입력창
+    - 입력 후 process_user_input 실행
+
+    Returns:
+        None
+    """
     st.markdown('<div class="chat-stage">', unsafe_allow_html=True)
     render_intro()
 
+    # 채팅 메시지 출력
     for message in st.session_state.messages:
         render_message(message)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # 빠른 선택 버튼 렌더링
     if st.session_state.quick_buttons:
         st.markdown('<div class="quick-title">빠른 선택</div>', unsafe_allow_html=True)
         cols = st.columns(len(st.session_state.quick_buttons))
@@ -288,6 +417,7 @@ def render_chat_area() -> None:
                     st.session_state.pending_input = label
                     st.rerun()
 
+    # 채팅 입력창
     user_input = st.chat_input("여행에 대해 무엇이든 물어보세요...")
     if user_input and user_input.strip():
         loading_slot = st.empty()

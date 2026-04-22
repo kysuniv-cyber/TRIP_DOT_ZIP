@@ -1,3 +1,18 @@
+"""
+chat_logic.py
+
+Streamlit 기반 여행 추천 챗봇의 핵심 대화 처리 로직을 담당하는 모듈이다.
+
+주요 역할:
+- 사용자 입력 처리
+- intent 기반 분기
+- 날씨 → 장소 → 일정 순의 오케스트레이션 실행
+- 일반 대화 fallback 처리
+- UI에 표시할 응답 문자열 생성
+
+이 모듈은 session_state, tool, agent를 연결하는
+컨트롤 레이어 역할을 한다.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,19 +21,25 @@ import sys
 import streamlit as st
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-sys.path.append(str(BASE_DIR))
-ROOT_DIR = Path(__file__).resolve().parents[1]
+# =========================
+# 환경 경로 설정
+# =========================
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-load_dotenv(ROOT_DIR / ".env")
+load_dotenv(PROJECT_ROOT / ".env")
 
-from mock_tools.place_tools import search_places
-from mock_tools.schedule_tools import build_schedule
-from mock_tools.weather_tools import get_weather, get_weather_from_prompt
+# =========================
+# 외부 기능 import
+# =========================
+from test_backup.mock_tools.place_tools import search_places
+from test_backup.mock_tools.schedule_tools import build_schedule
+from test_backup.mock_tools.weather_tools import get_weather, get_weather_from_prompt
 from services.intent_service import classify_intent_by_rule
 from llm.prompts import SYSTEM_PROMPT
-from proto.utils import parse_buttons
-from agent_builder import agent
+from test_backup.proto.utils import parse_buttons
+from test_backup.agent_builder import agent
 
 from streamlit_app.back.session_state import (
     now_label,
@@ -28,6 +49,15 @@ from streamlit_app.back.session_state import (
 
 
 def extract_message_text(content) -> str:
+    """
+    LLM 또는 tool 응답 content를 문자열로 안전하게 변환한다.
+
+    Args:
+        content: 문자열, 멀티모달 리스트, 기타 객체
+
+    Returns:
+        str: 사용자에게 출력 가능한 문자열
+    """
     if isinstance(content, str):
         return content
 
@@ -44,6 +74,16 @@ def extract_message_text(content) -> str:
 
 
 def invoke_tool(tool, payload: dict) -> dict:
+    """
+    tool.invoke 호출을 감싸고 예외를 안전하게 처리한다.
+
+    Args:
+        tool: LangChain tool 또는 invoke 가능한 객체
+        payload (dict): tool 입력 데이터
+
+    Returns:
+        dict: tool 실행 결과 또는 에러 정보
+    """
     try:
         return tool.invoke(payload)
     except Exception as exc:
@@ -55,18 +95,31 @@ def invoke_tool(tool, payload: dict) -> dict:
 
 
 def get_mock_preview() -> dict:
+    """
+    사이드바 미리보기용 mock 결과를 생성한다.
+
+    현재 session_state의 여행 조건을 바탕으로
+    날씨 / 장소 / 일정 결과를 미리 계산한다.
+
+    Returns:
+        dict: weather, places, schedule 결과
+    """
     info = st.session_state.trip_info
     destination = info["destination"] if info["destination"] != "미정" else "강릉"
     trip_date = info["date"] if info["date"] != "미정" else "2026-05-14"
     style = info["style"] if info["style"] != "미정" else "휴식형"
 
+    # 1. 날씨 미리보기
     weather = invoke_tool(get_weather, {"destination": destination, "date": trip_date})
+
+    # 2. 장소 미리보기
     places = invoke_tool(search_places, {"region": destination, "theme": style})
 
     place_items = []
     if places.get("status") == "success":
         place_items = places.get("data", {}).get("places", [])
 
+    # 3. 일정 미리보기
     schedule = invoke_tool(
         build_schedule,
         {
@@ -84,6 +137,15 @@ def get_mock_preview() -> dict:
 
 
 def initialize_greeting() -> None:
+    """
+    앱 최초 진입 시 초기 인사를 생성한다.
+
+    persona context와 system prompt를 함께 넣어
+    첫 응답을 생성하고 session_state에 저장한다.
+
+    Returns:
+        None
+    """
     st.write("DEBUG: initialize_greeting 진입")
 
     if st.session_state.initialized:
@@ -121,6 +183,16 @@ def initialize_greeting() -> None:
 
 
 def format_weather_first_reply(tool_result: dict, fallback_city: str) -> str:
+    """
+    날씨 tool 결과를 사용자 친화적인 텍스트로 변환한다.
+
+    Args:
+        tool_result (dict): 날씨 tool 실행 결과
+        fallback_city (str): 도시명 fallback 값
+
+    Returns:
+        str: 날씨 안내 문자열
+    """
     data = tool_result.get("data", {}) if isinstance(tool_result, dict) else {}
     result_data = data.get("result", {}) if isinstance(data, dict) else {}
 
@@ -169,6 +241,15 @@ def format_weather_first_reply(tool_result: dict, fallback_city: str) -> str:
 
 
 def format_schedule_reply(schedule_result: dict) -> str:
+    """
+    일정 생성 결과를 사용자용 문자열로 변환한다.
+
+    Args:
+        schedule_result (dict): 일정 생성 결과
+
+    Returns:
+        str: 일정 안내 문자열
+    """
     if not isinstance(schedule_result, dict) or schedule_result.get("status") != "success":
         return "일정은 아직 만들지 못했어요."
 
@@ -191,6 +272,15 @@ def format_schedule_reply(schedule_result: dict) -> str:
 
 
 def format_places_reply(places_result: dict) -> str:
+    """
+    장소 검색 결과를 사용자용 문자열로 변환한다.
+
+    Args:
+        places_result (dict): 장소 검색 결과
+
+    Returns:
+        str: 장소 추천 문자열
+    """
     if not isinstance(places_result, dict) or places_result.get("status") != "success":
         return "추천 장소는 아직 찾지 못했어요."
 
@@ -211,10 +301,29 @@ def format_places_reply(places_result: dict) -> str:
 
 
 def process_user_input(user_text: str) -> None:
+    """
+    사용자 입력을 처리하고 최종 응답을 생성한다.
+
+    흐름:
+    1. 사용자 입력을 session_state에 저장
+    2. intent를 분류
+    3. 여행 관련 요청이면 날씨 → 장소 → 일정 흐름 실행
+    4. 일반 대화면 agent로 fallback
+    5. 최종 답변을 session_state에 저장
+
+    Args:
+        user_text (str): 사용자 입력 문장
+
+    Returns:
+        None
+    """
     print("DEBUG: process_user_input 진입")
     print("DEBUG: user_text =", user_text)
 
+    # 1. 여행 정보 업데이트
     update_trip_info(user_text)
+
+    # 2. 사용자 메시지 저장
     st.session_state.messages.append(
         {"role": "user", "content": user_text, "time": now_label()}
     )
@@ -224,6 +333,7 @@ def process_user_input(user_text: str) -> None:
     print("DEBUG: current_messages =", st.session_state.messages)
 
     try:
+        # 3. intent 분류
         intent_result = classify_intent_by_rule(user_text)
         print("DEBUG: intent_result =", intent_result)
 
@@ -236,6 +346,7 @@ def process_user_input(user_text: str) -> None:
         if style == "미정":
             style = "휴식형"
 
+        # 4. 여행 관련 요청인지 판별
         is_travel_related = intent_result["intent"] in [
             "weather_query",
             "schedule_generation",
@@ -248,6 +359,7 @@ def process_user_input(user_text: str) -> None:
             print("DEBUG destination =", destination)
             print("DEBUG style =", style)
 
+            # 4-1. 자연어 기반 날씨 먼저 조회
             weather_result = get_weather_from_prompt.invoke(
                 {"user_prompt": user_text}
             )
@@ -255,6 +367,7 @@ def process_user_input(user_text: str) -> None:
 
             reply_parts = [format_weather_first_reply(weather_result, destination)]
 
+            # 4-2. 장소 검색
             try:
                 places_result = invoke_tool(
                     search_places,
@@ -273,6 +386,7 @@ def process_user_input(user_text: str) -> None:
             if places_result.get("status") == "success":
                 place_items = places_result.get("data", {}).get("places", []) or []
 
+            # 4-3. 일정 생성 요청이면 일정까지 생성
             if intent_result["intent"] == "schedule_generation" and place_items:
                 try:
                     schedule_result = invoke_tool(
@@ -289,6 +403,7 @@ def process_user_input(user_text: str) -> None:
                     print("DEBUG schedule_result 예외 =", exc)
                     reply_parts.append(f"\n일정 생성 중 오류가 있었어요.\n- 오류: {exc}")
 
+            # 4-3. 일정 생성 요청이면 일정까지 생성
             if intent_result["intent"] in [
                 "place_search",
                 "travel_recommendation",
@@ -299,6 +414,7 @@ def process_user_input(user_text: str) -> None:
             raw_reply = "\n".join(part for part in reply_parts if part).strip()
 
         else:
+            # 5. 일반 대화는 agent fallback
             response = agent.invoke(
                 {
                     "messages": [
@@ -322,6 +438,7 @@ def process_user_input(user_text: str) -> None:
             f"오류: {exc}"
         )
 
+    # 6. 최종 응답 저장
     reply_text, reply_buttons = parse_buttons(raw_reply)
     st.session_state.messages.append(
         {"role": "assistant", "content": reply_text, "time": now_label()}
