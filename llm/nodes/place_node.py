@@ -115,7 +115,7 @@ def place_node(state: TravelAgentState):
             raw_data=api_result["json_data"]["places"], 
             chroma_dir=Settings.CHROMA_PERSIST_DIR, 
             collection_name=Settings.CHROMA_COLLECTION_NAME, 
-            test_flag=True
+            test_flag=False
         )
 
     # api_result가 실패

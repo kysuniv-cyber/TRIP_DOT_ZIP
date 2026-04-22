@@ -24,6 +24,7 @@ MARKER_ICON_TEMPLATE = """
 </div>
 """
 
+# 카테고리 단순화를 위한 mapping값.
 PLACE_CATEGORY_MAP = {
     # --- 문화 및 역사 (STAY_TIME_CONFIG 기준) ---
     "art_gallery": ["art_gallery"],

@@ -15,7 +15,7 @@ class Settings:
     max_tool_rounds: int = int(os.getenv("MAX_TOOL_ROUNDS", "5"))
 
     # 벡터 DB 설정
-    CHROMA_PERSIST_DIR: str = os.path.join(os.getcwd(), "db", "chroma_db")
+    CHROMA_PERSIST_DIR: str = os.path.join(os.getcwd(), "data", "chroma")
     CHROMA_COLLECTION_NAME: str = "place_reviews"
 
     def validate(self) -> None:

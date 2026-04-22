@@ -118,10 +118,12 @@ class OpenAIEmbedder():
         all_embeddings = []
 
         for i in range(0, len(texts), batch_size):
-            batch = texts[i: i + batch_size]
-            response = self.client.embeddings.create(input=batch, model=self.model)
-            all_embeddings.extend([r.embedding for r in response.data])
+            batch = texts[i : i + batch_size]
+            # self.client.embeddings.create 대신 self.client.embed_documents 사용
+            response = self.client.embed_documents(batch) 
+            all_embeddings.extend(response)
             print(f"  임베딩 완료: {min(i + batch_size, len(texts))}/{len(texts)}")
+            
         return all_embeddings
     
 class ChromaDBHandler():
