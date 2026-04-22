@@ -7,7 +7,7 @@ LLM 동작 검증을 위한 Place mock tool.
 """
 
 from langchain.tools import tool
-from test_backup.schemas import success_response
+from test_backup.schema import success_response
 
 
 @tool

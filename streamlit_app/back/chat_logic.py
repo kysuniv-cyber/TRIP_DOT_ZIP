@@ -33,13 +33,13 @@ load_dotenv(PROJECT_ROOT / ".env")
 # =========================
 # 외부 기능 import
 # =========================
-from test_backup.mock_tools.place_tools import search_places
-from test_backup.mock_tools.schedule_tools import build_schedule
-from test_backup.mock_tools.weather_tools import get_weather, get_weather_from_prompt
-from services.intent_service import classify_intent_by_rule
-from llm.prompts import SYSTEM_PROMPT
+from llm.graph.builder import app as graph_app
 from test_backup.proto.utils import parse_buttons
-from test_backup.agent_builder import agent
+from streamlit_app.back.session_state import (
+    now_label,
+    update_trip_info,
+    build_persona_context,
+)
 
 from streamlit_app.back.session_state import (
     now_label,
@@ -73,67 +73,46 @@ def extract_message_text(content) -> str:
     return str(content)
 
 
-def invoke_tool(tool, payload: dict) -> dict:
-    """
-    tool.invoke 호출을 감싸고 예외를 안전하게 처리한다.
-
-    Args:
-        tool: LangChain tool 또는 invoke 가능한 객체
-        payload (dict): tool 입력 데이터
-
-    Returns:
-        dict: tool 실행 결과 또는 에러 정보
-    """
-    try:
-        return tool.invoke(payload)
-    except Exception as exc:
-        return {
-            "status": "error",
-            "data": None,
-            "error": {"message": str(exc)},
-        }
-
-
-def get_mock_preview() -> dict:
-    """
-    사이드바 미리보기용 mock 결과를 생성한다.
-
-    현재 session_state의 여행 조건을 바탕으로
-    날씨 / 장소 / 일정 결과를 미리 계산한다.
-
-    Returns:
-        dict: weather, places, schedule 결과
-    """
-    info = st.session_state.trip_info
-    destination = info["destination"] if info["destination"] != "미정" else "강릉"
-    trip_date = info["date"] if info["date"] != "미정" else "2026-05-14"
-    style = info["style"] if info["style"] != "미정" else "휴식형"
-
-    # 1. 날씨 미리보기
-    weather = invoke_tool(get_weather, {"destination": destination, "date": trip_date})
-
-    # 2. 장소 미리보기
-    places = invoke_tool(search_places, {"region": destination, "theme": style})
-
-    place_items = []
-    if places.get("status") == "success":
-        place_items = places.get("data", {}).get("places", [])
-
-    # 3. 일정 미리보기
-    schedule = invoke_tool(
-        build_schedule,
-        {
-            "start_time": "10:00",
-            "end_time": "18:00",
-            "places": place_items,
-        },
-    )
-
-    return {
-        "weather": weather,
-        "places": places,
-        "schedule": schedule,
-    }
+# def get_mock_preview() -> dict:
+#     """
+#     사이드바 미리보기용 mock 결과를 생성한다.
+#
+#     현재 session_state의 여행 조건을 바탕으로
+#     날씨 / 장소 / 일정 결과를 미리 계산한다.
+#
+#     Returns:
+#         dict: weather, places, schedule 결과
+#     """
+#     info = st.session_state.trip_info
+#     destination = info["destination"] if info["destination"] != "미정" else "강릉"
+#     trip_date = info["date"] if info["date"] != "미정" else "2026-05-14"
+#     style = info["style"] if info["style"] != "미정" else "휴식형"
+#
+#     # 1. 날씨 미리보기
+#     weather = invoke_tool(get_weather, {"destination": destination, "date": trip_date})
+#
+#     # 2. 장소 미리보기
+#     places = invoke_tool(search_places, {"region": destination, "theme": style})
+#
+#     place_items = []
+#     if places.get("status") == "success":
+#         place_items = places.get("data", {}).get("places", [])
+#
+#     # 3. 일정 미리보기
+#     schedule = invoke_tool(
+#         build_schedule,
+#         {
+#             "start_time": "10:00",
+#             "end_time": "18:00",
+#             "places": place_items,
+#         },
+#     )
+#
+#     return {
+#         "weather": weather,
+#         "places": places,
+#         "schedule": schedule,
+#     }
 
 
 def initialize_greeting() -> None:
@@ -146,33 +125,15 @@ def initialize_greeting() -> None:
     Returns:
         None
     """
-    st.write("DEBUG: initialize_greeting 진입")
+    print("DEBUG: initialize_greeting 진입")
 
     if st.session_state.initialized:
         return
 
-    try:
-        with st.spinner("트립닷집이 준비 중이에요..."):
-            print("DEBUG: executor.run 직전")
-            response = agent.invoke(
-                {
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "system", "content": build_persona_context()},
-                        {"role": "user", "content": "안녕하세요! 여행 추천을 받고 싶어요."},
-                    ]
-                }
-            )
-
-        greeting_raw = extract_message_text(response["messages"][-1].content)
-
-    except Exception as exc:
-        print("DEBUG: initialize_greeting 예외 =", exc)
-        st.write(f"DEBUG 예외: {exc}")
-        greeting_raw = (
-            "안녕하세요! 저는 여행 추천을 도와드릴 트립닷집이에요.\n"
-            "어디로 여행을 가고 싶으신가요? [BUTTONS:국내 여행|해외 여행|아직 모르겠어요]"
-        )
+    greeting_raw = (
+        "안녕하세요! 저는 여행 추천을 도와드릴 트립닷집이에요.\n"
+        "어디로 여행을 가고 싶으신가요? [BUTTONS:국내 여행|해외 여행|아직 모르겠어요]"
+    )
 
     greeting_text, greeting_buttons = parse_buttons(greeting_raw)
     st.session_state.messages.append(
@@ -181,8 +142,7 @@ def initialize_greeting() -> None:
     st.session_state.quick_buttons = greeting_buttons
     st.session_state.initialized = True
 
-
-def format_weather_first_reply(tool_result: dict, fallback_city: str) -> str:
+def format_weather_from_state(state: dict) -> str:
     """
     날씨 tool 결과를 사용자 친화적인 텍스트로 변환한다.
 
@@ -193,25 +153,17 @@ def format_weather_first_reply(tool_result: dict, fallback_city: str) -> str:
     Returns:
         str: 날씨 안내 문자열
     """
-    data = tool_result.get("data", {}) if isinstance(tool_result, dict) else {}
-    result_data = data.get("result", {}) if isinstance(data, dict) else {}
+    weather_data = state.get("weather_data", {}) or {}
 
-    if (
-        not isinstance(tool_result, dict)
-        or tool_result.get("status") == "error"
-        or result_data.get("status") == "error"
-    ):
-        return (
-            "날씨 정보를 먼저 확인해보려 했는데 불러오지 못했어요.\n"
-            f"- 오류: {tool_result.get('message') or result_data.get('message') or '알 수 없는 오류'}"
-        )
+    if not weather_data:
+        return "날씨 정보를 불러오지 못했어요."
 
-    weather_info = result_data.get("weather", {})
-    condition_info = result_data.get("condition", {})
-    ddatchwi_info = result_data.get("ddatchwi", {})
+    display_city = weather_data.get("display_city_name", "여행지")
+    resolved_date = weather_data.get("resolved_travel_date", "날짜 정보 없음")
 
-    display_city = data.get("display_city_name", fallback_city)
-    resolved_date = data.get("resolved_travel_date", "날짜 정보 없음")
+    weather_info = weather_data.get("weather", {})
+    condition_info = weather_data.get("condition", {})
+    ddatchwi_info = weather_data.get("ddatchwi", {})
 
     weather_text = weather_info.get("description", "정보 없음")
     temp = weather_info.get("temperature", "정보 없음")
@@ -239,30 +191,26 @@ def format_weather_first_reply(tool_result: dict, fallback_city: str) -> str:
         f"{ddatchwi_text}"
     )
 
-
-def format_schedule_reply(schedule_result: dict) -> str:
+def format_schedule_from_state(state: dict) -> str:
     """
-    일정 생성 결과를 사용자용 문자열로 변환한다.
+    LangGraph state의 itinerary를 사용자용 문자열로 변환한다.
 
     Args:
-        schedule_result (dict): 일정 생성 결과
+        state (dict): LangGraph 상태값
 
     Returns:
         str: 일정 안내 문자열
     """
-    if not isinstance(schedule_result, dict) or schedule_result.get("status") != "success":
-        return "일정은 아직 만들지 못했어요."
-
-    data = schedule_result.get("data", {}) or {}
-    itinerary = data.get("itinerary", [])
+    itinerary = state.get("itinerary", []) or []
 
     if not itinerary:
-        return "일정 후보가 아직 없어요."
+        return "일정은 아직 만들지 못했어요."
 
     lines = ["\n추천 일정은 이렇게 짜볼게요."]
     for idx, item in enumerate(itinerary[:5], start=1):
         time_text = item.get("time") or item.get("arrival") or ""
         place_name = item.get("place_name") or item.get("name") or f"{idx}번 장소"
+
         if time_text:
             lines.append(f"- {time_text} {place_name}")
         else:
@@ -329,107 +277,24 @@ def process_user_input(user_text: str) -> None:
     )
     st.session_state.quick_buttons = []
 
-    print("DEBUG: executor.run 직전")
-    print("DEBUG: current_messages =", st.session_state.messages)
-
     try:
-        # 3. intent 분류
-        intent_result = classify_intent_by_rule(user_text)
-        print("DEBUG: intent_result =", intent_result)
+        # 3. LangGraph 입력 state 구성
+        graph_input = {
+            "messages": [
+                {"role": m["role"], "content": m["content"]}
+                for m in st.session_state.messages
+            ]
+        }
 
-        info = st.session_state.trip_info
-        destination = info.get("destination", "미정")
-        style = info.get("style", "미정")
+        print("DEBUG: graph_app.invoke 직전")
+        print("DEBUG: graph_input =", graph_input)
 
-        if destination == "미정":
-            destination = "서울"
-        if style == "미정":
-            style = "휴식형"
+        # 4. LangGraph 실행
+        result = graph_app.invoke(graph_input)
+        print("DEBUG: graph result =", result)
 
-        # 4. 여행 관련 요청인지 판별
-        is_travel_related = intent_result["intent"] in [
-            "weather_query",
-            "schedule_generation",
-            "place_search",
-            "travel_recommendation",
-        ]
-
-        if is_travel_related:
-            print("🔥 WEATHER FIRST FLOW")
-            print("DEBUG destination =", destination)
-            print("DEBUG style =", style)
-
-            # 4-1. 자연어 기반 날씨 먼저 조회
-            weather_result = get_weather_from_prompt.invoke(
-                {"user_prompt": user_text}
-            )
-            print("DEBUG weather_result =", weather_result)
-
-            reply_parts = [format_weather_first_reply(weather_result, destination)]
-
-            # 4-2. 장소 검색
-            try:
-                places_result = invoke_tool(
-                    search_places,
-                    {"region": destination, "theme": style},
-                )
-                print("DEBUG places_result =", places_result)
-            except Exception as exc:
-                print("DEBUG places_result 예외 =", exc)
-                places_result = {
-                    "status": "error",
-                    "data": None,
-                    "error": {"message": str(exc)},
-                }
-
-            place_items = []
-            if places_result.get("status") == "success":
-                place_items = places_result.get("data", {}).get("places", []) or []
-
-            # 4-3. 일정 생성 요청이면 일정까지 생성
-            if intent_result["intent"] == "schedule_generation" and place_items:
-                try:
-                    schedule_result = invoke_tool(
-                        build_schedule,
-                        {
-                            "start_time": "10:00",
-                            "end_time": "18:00",
-                            "places": place_items,
-                        },
-                    )
-                    print("DEBUG schedule_result =", schedule_result)
-                    reply_parts.append(format_schedule_reply(schedule_result))
-                except Exception as exc:
-                    print("DEBUG schedule_result 예외 =", exc)
-                    reply_parts.append(f"\n일정 생성 중 오류가 있었어요.\n- 오류: {exc}")
-
-            # 4-3. 일정 생성 요청이면 일정까지 생성
-            if intent_result["intent"] in [
-                "place_search",
-                "travel_recommendation",
-                "schedule_generation",
-            ]:
-                reply_parts.append(format_places_reply(places_result))
-
-            raw_reply = "\n".join(part for part in reply_parts if part).strip()
-
-        else:
-            # 5. 일반 대화는 agent fallback
-            response = agent.invoke(
-                {
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "system", "content": build_persona_context()},
-                        *[
-                            {"role": m["role"], "content": m["content"]}
-                            for m in st.session_state.messages
-                        ],
-                    ]
-                }
-            )
-
-            raw_reply = extract_message_text(response["messages"][-1].content)
-            print("DEBUG: executor.run 직후", raw_reply)
+        # 5. 최종 응답 추출
+        raw_reply = result.get("final_response", "응답을 만들지 못했어요.")
 
     except Exception as exc:
         print("DEBUG: process_user_input 예외 =", exc)
