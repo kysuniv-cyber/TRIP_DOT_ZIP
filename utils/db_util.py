@@ -80,6 +80,7 @@ class PlaceReviewChunkInfo:
 
     # 분석용 파생 필드
     # 추가할지 고민 중.
+    tags: str = ""  # 필터링용 태그 리스트 (ChromaDB 저장을 위해 콤마로 구분된 문자열로 관리)
 
     char_count: int = 0
     word_count: int = 0
@@ -186,6 +187,17 @@ def build_embedding_text(place_name: str, place_category: str, review_text: str)
     """
     return f"[{place_category}] {place_name} 리뷰: {review_text}"
 
+def extract_tags(text: str) -> str:
+    """
+    KEYWORD_DICT를 순회하며 리뷰 텍스트에 포함된 키워드 그룹(태그)을 추출합니다.
+    결과는 "아이,청결" 형태의 문자열로 반환합니다.
+    """
+    found_tags = []
+    for tag_name, keywords in KEYWORD_DICT.items():
+        if any(kw in text for kw in keywords):
+            found_tags.append(tag_name)
+    return ",".join(found_tags)
+
 def parse_place_data(raw_data: dict) -> List[PlaceReviewChunkInfo]:
     """
         Google Place API 응답 JSON을 활용할 수 있는 리스트로 변환
@@ -207,8 +219,9 @@ def parse_place_data(raw_data: dict) -> List[PlaceReviewChunkInfo]:
             raw_text = review.get("text", {}).get("text", "").strip()
             if not raw_text:                    # 텍스트 없는 리뷰 스킵
                 continue
-            
+
             cleaned = clean_text(raw_text)
+            tags = extract_tags(cleaned)
             r_rating = int(review.get("rating", 3))
             author   = review.get("authorAttribution", {}).get("displayName", "익명")
             pub_time = review.get("publishTime", "")
@@ -233,6 +246,7 @@ def parse_place_data(raw_data: dict) -> List[PlaceReviewChunkInfo]:
                 review_published_at= pub_time,
                 review_relative_time = rel_time,
                 language_code      = lang,
+                tags               = tags,
                 char_count         = len(cleaned),
                 word_count         = len(cleaned.split()),
             )
