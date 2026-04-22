@@ -116,15 +116,19 @@ def _extract_date_fields(user_text: str) -> dict:
     if "오늘" in user_text:
         result["raw_date_text"] = "오늘"
         return result
+
     if "내일" in user_text:
         result["raw_date_text"] = "내일"
         return result
+
     if "모레" in user_text:
         result["raw_date_text"] = "모레"
         return result
+
     if "다음 주 토요일" in user_text or "다음주 토요일" in user_text:
         result["raw_date_text"] = "다음주토요일"
         return result
+
     if "이번 주 토요일" in user_text or "이번주 토요일" in user_text:
         result["raw_date_text"] = "이번주토요일"
         return result
@@ -229,14 +233,14 @@ def extract_trip_requirements_node(state: TravelAgentState) -> dict:
     if constraints:
         updates[StateKeys.CONSTRAINTS] = constraints
 
-    if date_info["travel_date"]:
-        updates[StateKeys.TRAVEL_DATE] = date_info["travel_date"]
+    if date_info.get("travel_date"):
+        updates[StateKeys.TRAVEL_DATE] = date_info.get("travel_date")
 
-    if date_info["relative_days"]:
-        updates[StateKeys.RELATIVE_DAYS] = date_info["relative_days"]
+    if date_info.get("relative_days") is not None:
+        updates[StateKeys.RELATIVE_DAYS] = date_info.get("relative_days")
 
-    if date_info["raw_date_text"]:
-        updates[StateKeys.RAW_DATE_TEXT] = date_info["raw_date_text"]
+    if date_info.get("raw_date_text"):
+        updates[StateKeys.RAW_DATE_TEXT] = date_info.get("raw_date_text")
 
     # start_time은 선택값
     if start_time:

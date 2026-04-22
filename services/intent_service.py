@@ -81,8 +81,14 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
         r"^hello+$",
     ]
 
+    has_modify = _contains_any(text, modify_keywords)
+    has_weather = _contains_any(text, weather_keywords)
+    has_schedule = _contains_any(text, schedule_keywords)
+    has_place = _contains_any(text, place_keywords)
+    has_travel = _contains_any(text, travel_keywords)
+
     # 1. 수정 요청 우선
-    if _contains_any(text, modify_keywords):
+    if has_modify:
         return {
             "intent": "modify_request",
             "confidence": 0.94,
@@ -90,9 +96,18 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "수정/변경 요청 키워드 감지",
         }
 
-    # 2. 기간 + 여행/도시 → 일정 생성
+    # 2. 날씨 단독 질문 우선 처리
+    if has_weather and not (has_schedule or has_place or has_travel):
+        return {
+            "intent": "weather_query",
+            "confidence": 0.97,
+            "route": "weather",
+            "reason": "날씨 단독 질의로 판단",
+        }
+
+    # 3. 기간 + 여행/도시 → 일정 생성
     if ("부터" in text and "까지" in text) and (
-        _contains_any(text, travel_keywords) or _contains_any(text, city_keywords)
+        has_travel or _contains_any(text, city_keywords)
     ):
         return {
             "intent": "schedule_generation",
@@ -101,7 +116,7 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "reason": "기간이 포함된 여행 요청 감지",
         }
 
-    # 3. 여행/도시 + 요일/주차 표현 → 일정 생성
+    # 4. 여행/도시 + 요일/주차 표현 → 일정 생성
     if (
         (_contains_any(text, travel_keywords) or _contains_any(text, city_keywords))
         and _contains_any(text, duration_keywords)
@@ -111,15 +126,6 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
             "confidence": 0.93,
             "route": "schedule",
             "reason": "여행지 + 날짜/요일 표현 감지",
-        }
-
-    # 4. 날씨
-    if _contains_any(text, weather_keywords):
-        return {
-            "intent": "weather_query",
-            "confidence": 0.95,
-            "route": "weather",
-            "reason": "날씨 관련 키워드 감지",
         }
 
     # 5. 일정 명시 키워드
