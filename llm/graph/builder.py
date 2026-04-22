@@ -2,15 +2,11 @@ from langgraph.graph import StateGraph, END
 from llm.graph.state import TravelAgentState
 from llm.graph.routes import should_continue, route_after_missing_check, route_after_safety_check
 from llm.nodes.intent_nodes import route_intent_node
-from llm.nodes.trip_nodes import (
-    extract_trip_requirements_node,
-    check_missing_info_node,
-    ask_user_for_missing_info_node,
-    select_places_node,
-    modify_trip_requirements_node
-)
+from llm.nodes.trip_nodes import extract_trip_requirements_node, check_missing_info_node, ask_user_for_missing_info_node, select_places_node
 from llm.nodes.weather_nodes import weather_node
 from llm.nodes.response_nodes import build_response_node, blocked_response_node
+from llm.nodes.place_node import place_node
+from llm.nodes.place_search_node import place_search_node
 
 # middleware node
 from llm.nodes.safety_nodes import safe_input_node
@@ -27,15 +23,11 @@ workflow.add_node("intent_router", route_intent_node)
 workflow.add_node("extract_trip_requirements_node", extract_trip_requirements_node)
 workflow.add_node("check_missing_info_node", check_missing_info_node)
 workflow.add_node("ask_user_node", ask_user_for_missing_info_node)
-workflow.add_node("modify_node", modify_trip_requirements_node)   # 사용자 정보 수정 노드
-workflow.add_node("response_node", build_response_node) # 최종 답변 노드
-# 나머지 노드들은 담당자들이 완성하는 대로 추가 예정 -> 임의로 place_node 추가
-
-# 일단 확인용 mock node 추가
-workflow.add_node("place_node", search_places_node)
-workflow.add_node("select_places_node", select_places_node)     # 장소 선택 노드(실제 노드 연결함)
-workflow.add_node("scheduler_node", scheduler_node)
-workflow.add_node("weather_node", weather_node)         # 실제 노드 연결함
+workflow.add_node("response_node", build_response_node)         # 최종 답변 노드
+workflow.add_node("place_node", place_node)                     # DB에 장소 적재 노드
+workflow.add_node("place_search_node", place_search_node)       # DB에서 장소 선택 노드
+workflow.add_node("weather_node", weather_node)
+workflow.add_node("scheduler_node", scheduler_node)             # mock node (아직 연결 안됨)
 
 # middleware node
 workflow.add_node("safe_input_node", safe_input_node)
@@ -69,19 +61,15 @@ workflow.add_conditional_edges(
     {
         "ask_user_node": "ask_user_node",       # 사용자에게 정보를 더 받아야 하면 여기로
         "weather_node": "weather_node",         # 날씨 정보가 필요하면 여기로
-        "place_node": "place_node",             # 장소 검색이 필요하면 여기로
+        "place_node": "place_node",             # 장소 검색이 필요하면 여기로 ★ 수정 필요
         "scheduler_node": "scheduler_node",     # 이미 장소가 충분하면 바로 여기로
-        "modify_node": "modify_node",           # 정보 수정이 필요하면 여기로
         "response_node": "response_node"        # 일반 대화는 바로 답변으로!
     }
 )
 
-# 사용자가 정보 수정을 하는 경우
-workflow.add_edge("modify_node", "place_node")
-
 # 장소 검색 -> 장소 선택 -> 일정 생성
-workflow.add_edge("place_node", "select_places_node")
-workflow.add_edge("select_places_node", "scheduler_node")
+workflow.add_edge("place_node", "place_search_node")
+workflow.add_edge("place_search_node", "scheduler_node")
 
 # ask_user는 질문을 만든 뒤 종료
 workflow.add_edge("ask_user_node", END)
