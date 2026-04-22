@@ -297,7 +297,74 @@ def ask_user_for_missing_info_node(state: TravelAgentState) -> dict:
 
 
 # -----------------------------
-# 메인 노드 4: 사용자가 선택한 장소 저장
+# 메인 노드 4: 정보 수정
+# -----------------------------
+def modify_trip_requirements_node(state: TravelAgentState) -> dict:
+    """
+    마지막 사용자 메세지가 수정 요청일 때,
+    기존 state를 유지하면서 필요한 조건만 덮어쓴다.
+    """
+    messages = state.get(StateKeys.MESSAGES, [])
+    if not messages:
+        return {}
+
+    last_msg = messages[-1]
+    user_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", "")
+
+    updates = {}
+
+    # 기존 값 복사
+    current_styles = list(state.get(StateKeys.STYLES, []))
+
+    # "말고" 뒤 문장을 우선 해석
+    parse_text = user_text
+    if "말고" in user_text:
+        parse_text = user_text.split("말고", 1)[1].strip()
+
+    # 1. 스타일 수정
+    # "카페 말고 맛집 위주로"
+    if "카페 말고" in user_text and "맛집" in user_text:
+        updates[StateKeys.STYLES] = ["맛집"]
+    elif "맛집 말고" in user_text and "카페" in user_text:
+        updates[StateKeys.STYLES] = ["카페"]
+    else:
+        # 일반 추출 결과가 있으면 덮어쓰기
+        extracted_styles = _extract_styles(parse_text)
+        if extracted_styles:
+            updates[StateKeys.STYLES] = extracted_styles
+        else:
+            updates[StateKeys.STYLES] = current_styles
+
+    # 2. 날짜 수정
+    date_info = _extract_date_fields(parse_text)
+
+    if date_info.get("travel_date"):
+        updates[StateKeys.TRAVEL_DATE] = date_info.get("travel_date")
+        updates[StateKeys.RAW_DATE_TEXT] = None
+        updates[StateKeys.RELATIVE_DAYS] = None
+
+    elif date_info.get("relative_days") is not None:
+        updates[StateKeys.RELATIVE_DAYS] = date_info.get("relative_days")
+        updates[StateKeys.TRAVEL_DATE] = None
+        updates[StateKeys.RAW_DATE_TEXT] = None
+
+    elif date_info.get("raw_date_text"):
+        updates[StateKeys.RAW_DATE_TEXT] = date_info.get("raw_date_text")
+        updates[StateKeys.TRAVEL_DATE] = None
+        updates[StateKeys.RELATIVE_DAYS] = None
+
+    # 3. 장소/일정은 수정 후 다시 만들 것이므로 초기화
+    updates[StateKeys.MAPPED_PLACES] = []
+    updates[StateKeys.SELECTED_PLACES] = []
+    updates[StateKeys.ITINERARY] = []
+
+    print("[DEBUG] modify updates =", updates)
+
+    return updates
+
+
+# -----------------------------
+# 메인 노드 5: 사용자가 선택한 장소 저장
 # -----------------------------
 def select_places_node(state: TravelAgentState) -> dict:
     """

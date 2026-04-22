@@ -23,8 +23,12 @@ def should_continue(state: TravelAgentState):
             return "place_node"
         return "scheduler_node"
 
-    # 4. 수정 요청이나 일반 대화
-    elif route in ["modify", "chat"]:
+    # 4. 수정 요청
+    elif route in "modify":
+        return "modify_node"
+
+    # 5. 알반 대화
+    elif route == "chat":
         return "response_node"
 
     # 기본값

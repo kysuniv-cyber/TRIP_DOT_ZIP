@@ -85,6 +85,7 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
     has_weather = _contains_any(text, weather_keywords)
     has_schedule = _contains_any(text, schedule_keywords)
     has_place = _contains_any(text, place_keywords)
+    has_city = _contains_any(text, city_keywords)
     has_travel = _contains_any(text, travel_keywords)
 
     # 1. 수정 요청 우선
@@ -107,7 +108,7 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
 
     # 3. 기간 + 여행/도시 → 일정 생성
     if ("부터" in text and "까지" in text) and (
-        has_travel or _contains_any(text, city_keywords)
+        has_travel or has_city
     ):
         return {
             "intent": "schedule_generation",
@@ -118,7 +119,7 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
 
     # 4. 여행/도시 + 요일/주차 표현 → 일정 생성
     if (
-        (_contains_any(text, travel_keywords) or _contains_any(text, city_keywords))
+        (_contains_any(text, travel_keywords) or has_city)
         and _contains_any(text, duration_keywords)
     ):
         return {
