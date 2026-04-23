@@ -229,6 +229,26 @@ def ask_user_for_missing_info_node(state: TravelAgentState) -> dict:
 
 
 def modify_trip_requirements_node(state: TravelAgentState) -> dict:
+    """
+        사용자의 최신 메시지에서 여행 요구사항(목적지, 스타일, 날짜 등)을 추출하여 상태를 수정합니다.
+
+        사용자가 대화 중에 목적지를 바꾸거나 특정 스타일(예: '카페 말고 맛집')을 요구할 경우,
+        기존에 저장된 데이터와의 정합성을 확인하고 필요한 필드를 업데이트합니다.
+        특히 목적지가 변경될 경우, 기존의 검색 결과 및 일정을 모두 초기화하여 새로운 도시 기준의
+        데이터가 생성되도록 트리거합니다.
+
+        Args:
+            state (TravelAgentState): 그래프의 현재 상태.
+                - MESSAGES: 사용자의 입력 텍스트 추출용
+                - DESTINATION: 기존 목적지와 비교용
+
+        Returns:
+            dict: 업데이트가 필요한 상태 값들을 담은 딕셔너리.
+                - DESTINATION: 새로운 목적지가 추출된 경우 업데이트
+                - MAPPED_PLACES, SELECTED_PLACES, ITINERARY: 목적지 변경 시 초기화([])
+                - STYLES: '맛집', '카페' 등 여행 스타일 정보
+                - TRAVEL_DATE, RAW_DATE_TEXT 등: 날짜 관련 정보
+        """
     messages = state.get(StateKeys.MESSAGES, [])
     if not messages:
         return {}
@@ -236,9 +256,23 @@ def modify_trip_requirements_node(state: TravelAgentState) -> dict:
     last_msg = messages[-1]
     user_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", "")
 
+    # 1. 반환할 업데이트 딕셔너리 초기화
     updates = {}
-    current_styles = list(state.get(StateKeys.STYLES, []))
 
+    # 목적지 추출 및 변경 확인
+    current_dest = state.get(StateKeys.DESTINATION)
+    new_extracted_dest = _extract_destination(user_text)
+
+    # 2. 목적지가 변경된 경우 -> 모든 장소/일정 데이터 강제 초기화
+    if new_extracted_dest is not None and new_extracted_dest != current_dest:
+        updates[StateKeys.DESTINATION] = new_extracted_dest
+        updates[StateKeys.MAPPED_PLACES] = []
+        updates[StateKeys.SELECTED_PLACES] = []
+        updates[StateKeys.ITINERARY] = []
+        updates[StateKeys.ROUTE] = "travel"
+        print(f"[DEBUG] Destination CHANGED to {new_extracted_dest}. Resetting ALL data.")
+
+    # 3. 스타일(Styles) 추출 및 업데이트
     parse_text = user_text
     if "말고" in user_text:
         parse_text = user_text.split("말고", 1)[1].strip()
@@ -251,62 +285,88 @@ def modify_trip_requirements_node(state: TravelAgentState) -> dict:
         extracted_styles = _extract_styles(parse_text)
         if extracted_styles:
             updates[StateKeys.STYLES] = extracted_styles
-        else:
-            updates[StateKeys.STYLES] = current_styles
 
+    # 4. 날짜 정보 추출 및 업데이트
     date_info = _extract_date_fields(parse_text)
-
-    if date_info.get("travel_date"):
-        updates[StateKeys.TRAVEL_DATE] = date_info.get("travel_date")
-        updates[StateKeys.RAW_DATE_TEXT] = None
-        updates[StateKeys.RELATIVE_DAYS] = None
-    elif date_info.get("relative_days") is not None:
-        updates[StateKeys.RELATIVE_DAYS] = date_info.get("relative_days")
-        updates[StateKeys.TRAVEL_DATE] = None
-        updates[StateKeys.RAW_DATE_TEXT] = None
-    elif date_info.get("raw_date_text"):
-        updates[StateKeys.RAW_DATE_TEXT] = date_info.get("raw_date_text")
-        updates[StateKeys.TRAVEL_DATE] = None
-        updates[StateKeys.RELATIVE_DAYS] = None
-
-    # 1. 목적지(destination)가 바뀌었는지 확인
-    current_dest = state.get(StateKeys.DESTINATION)
-    # 현재 입력에서 새로 추출된 목적지가 있는지 확인
-    new_extracted_dest = _extract_destination(user_text)
-
-    if new_extracted_dest and new_extracted_dest != current_dest:
-        # 목적지가 새로 입력되었거나 변경된 경우에만 '장소 및 일정' 관련 데이터 초기화
-        updates[StateKeys.DESTINATION] = new_extracted_dest
-        updates[StateKeys.MAPPED_PLACES] = []
-        updates[StateKeys.SELECTED_PLACES] = []
-        updates[StateKeys.ITINERARY] = []
-        print(f"[DEBUG] Destination changed to {new_extracted_dest}. Resetting results.")
-    else:
-        # 목적지가 같거나("부산" 또 입력), 목적지 언급이 없는 경우("내일 갈래")
-        # 기존 데이터를 유지하기 위해 updates에 관련 키를 넣지 않음 (LangGraph는 누락된 키를 유지함)
-        pass
-
-    # 2. 날짜/스타일 업데이트 (추출된 결과가 있을 때만 updates에 포함)
-    if date_info.get("travel_date") or date_info.get("raw_date_text"):
-        # 날짜 정보 업데이트 시 기존 상대날짜 등은 밀어버림 (배타적 선택)
+    if date_info.get("travel_date") or date_info.get("raw_date_text") or date_info.get("relative_days") is not None:
         updates[StateKeys.TRAVEL_DATE] = date_info.get("travel_date")
         updates[StateKeys.RAW_DATE_TEXT] = date_info.get("raw_date_text")
         updates[StateKeys.RELATIVE_DAYS] = date_info.get("relative_days")
 
-    print("[DEBUG] modify updates =", updates)
-
+    print("[DEBUG] Final modify updates =", updates)
     return updates
 
 
 def select_places_node(state: TravelAgentState) -> dict:
-    existing_selected = state.get(StateKeys.SELECTED_PLACES, [])
-    if existing_selected:
-        return {StateKeys.SELECTED_PLACES: existing_selected}
+    """
+        검색된 장소 리스트(mapped_places)에서 상위 장소를 선택하고 데이터 유효성을 검증합니다.
 
+        현재 상태에 저장된 목적지(current_dest)와 선택된 장소들 사이의 일관성을 체크합니다.
+        도시가 변경되어 이전 도시의 데이터가 남아있다면 이를 초기화하고,
+        유효한 검색 결과가 있을 경우 상위 3개의 장소를 선정하여 일정 생성 단계로 전달합니다.
+
+        Args:
+            state (TravelAgentState): 그래프의 현재 상태.
+                - DESTINATION: 현재 활성화된 목적지
+                - MAPPED_PLACES: 검색 노드에서 넘어온 장소 리스트
+                - SELECTED_PLACES: 기존에 선택된 장소 리스트
+                - ITINERARY: 기존에 생성된 일정 리스트
+
+        Returns:
+            dict: 상태 업데이트를 위한 딕셔너리.
+                - SELECTED_PLACES: 검증된 상위 장소 리스트 (최대 3개)
+                - ITINERARY: 새로운 장소가 선택될 경우 재계산을 위해 빈 리스트([])로 초기화
+        """
+    current_dest = state.get(StateKeys.DESTINATION)
     mapped_places = state.get(StateKeys.MAPPED_PLACES, [])
-    if not mapped_places:
-        return {StateKeys.SELECTED_PLACES: []}
+    existing_selected = state.get(StateKeys.SELECTED_PLACES, [])
+    existing_itinerary = state.get(StateKeys.ITINERARY, [])
 
-    selected_places = mapped_places[:3]
-    print("[DEBUG] selected_places =", selected_places)
-    return {StateKeys.SELECTED_PLACES: selected_places}
+    # 1. 기존 선택된 장소가 현재 목적지와 일치하는지 검증
+    def is_valid_selected_places():
+        if not existing_selected or not current_dest:
+            return False
+
+        for place in existing_selected:
+            text = place.get("text", "")
+            name = place.get("name", "")
+            if current_dest not in text and current_dest not in name:
+                return False
+        return True
+
+    # 2. 기존 데이터 검증
+    if existing_selected and existing_itinerary:
+        if is_valid_selected_places():
+            print("[DEBUG] Existing selection valid for current destination. Keeping them.")
+            return {}
+        else:
+            print("[DEBUG] Destination changed. Resetting selected_places and itinerary.")
+            return {
+                StateKeys.SELECTED_PLACES: [],
+                StateKeys.ITINERARY: []
+            }
+
+    # 3. mapped_places도 검증 (optional 개선)
+    if mapped_places and current_dest:
+        valid_mapped = [
+            p for p in mapped_places
+            if current_dest in p.get("text", "") or current_dest in p.get("name", "")
+        ]
+
+        if not valid_mapped:
+            print("[DEBUG] No valid mapped places for current destination.")
+            return {
+                StateKeys.SELECTED_PLACES: [],
+                StateKeys.ITINERARY: []
+            }
+    else:
+        valid_mapped = mapped_places
+
+    # 4. 새로 선택
+    selected = valid_mapped[:3]
+
+    print(f"[DEBUG] New places selected for {current_dest}. Resetting itinerary for scheduler.")
+    return {
+        StateKeys.SELECTED_PLACES: selected,
+        StateKeys.ITINERARY: []
+    }

@@ -282,20 +282,42 @@ def process_user_input(user_text: str) -> None:
 
     try:
         # 3. LangGraph 입력 state 구성
+
+        # --- 목적지 변경 감지 및 초기화 로직 ---
+        current_dest = st.session_state.get("destination")
+        current_selected = st.session_state.get("selected_places", [])
+        current_mapped = st.session_state.get("mapped_places", [])
+
+        # 목적지 정합성 체크 (장소 이름이나 텍스트에 도시명이 있는지 확인)
+        is_mismatch = False
+        if current_dest:
+            # 선택된 장소가 있다면 체크
+            if current_selected and current_dest not in current_selected[0].get('name', ''):
+                is_mismatch = True
+            # 검색된 리스트가 있다면 체크 (이게 핵심!)
+            elif current_mapped and current_dest not in current_mapped[0].get('text', ''):
+                is_mismatch = True
+
+        if is_mismatch:
+            print(f"DEBUG: Destination mismatch ({current_dest}). Clearing old data.")
+            current_selected = []
+            current_mapped = []
+            st.session_state["itinerary"] = []  # 일정도 비워줌
+
         # 메시지뿐만 아니라 세션에 저장된 기존 상태값들을 함께 전달합니다.
         graph_input = {
             "messages": [
                 {"role": m["role"], "content": m["content"]}
                 for m in st.session_state.messages
             ],
-            "destination": st.session_state.get("destination"),
+            "destination": current_dest,
             "styles": st.session_state.get("styles", []),
             "constraints": st.session_state.get("constraints", []),
             "travel_date": st.session_state.get("travel_date"),
             "start_time": st.session_state.get("start_time"),
-            "selected_places": st.session_state.get("selected_places", []),
+            "selected_places": current_selected, # 정제된 리스트 전달
             "itinerary": st.session_state.get("itinerary", []),
-            "mapped_places": st.session_state.get("mapped_places", []),
+            "mapped_places": current_mapped,
         }
 
         print("DEBUG: graph_app.invoke 직전")
@@ -310,9 +332,22 @@ def process_user_input(user_text: str) -> None:
             "destination", "styles", "constraints", "travel_date",
             "start_time", "selected_places", "mapped_places", "itinerary"
         ]
+
+        # 현재 그래프 결과에서 목적지가 바뀌었는지 확인
+        graph_dest = result.get("destination")
+        session_dest = st.session_state.get("destination")
+
         for field in state_fields:
-            if field in result:  # result.get(field) 대신 키 존재 여부 확인
+            if field in result:
+                # 그래프가 명시적으로 반환한 값으로 업데이트
                 st.session_state[field] = result[field]
+            elif graph_dest and graph_dest != session_dest:
+                # 목적지가 바뀌었는데 그래프 결과에 해당 필드가 없다면,
+                # 이전 도시 데이터가 섞이지 않도록 초기화
+                if field in ["selected_places", "mapped_places", "itinerary", "styles", "constraints"]:
+                    st.session_state[field] = []
+                else:
+                    st.session_state[field] = None
 
         print(
             f"DEBUG: Session Updated - dest={st.session_state.get('destination')}, places_cnt={len(st.session_state.get('selected_places', []))}")
