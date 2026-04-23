@@ -73,6 +73,15 @@ def extract_message_text(content) -> str:
     return str(content)
 
 
+def should_reuse_itinerary(user_text: str) -> bool:
+    schedule_keywords = [
+        "일정", "코스", "플랜", "루트", "짜줘", "계획",
+        "동선", "스케줄", "순서", "중심으로", "기준으로",
+    ]
+    text = user_text.strip().lower()
+    return any(keyword in text for keyword in schedule_keywords)
+
+
 def get_mock_preview() -> dict:
     """
     UI 하위 호환용 프리뷰 응답 형식을 반환한다.
@@ -305,6 +314,12 @@ def process_user_input(user_text: str) -> None:
             st.session_state["itinerary"] = []  # 일정도 비워줌
 
         # 메시지뿐만 아니라 세션에 저장된 기존 상태값들을 함께 전달합니다.
+        reuse_itinerary = should_reuse_itinerary(user_text)
+        current_itinerary = st.session_state.get("itinerary", []) if reuse_itinerary else []
+
+        if not reuse_itinerary and st.session_state.get("itinerary"):
+            print("DEBUG: Non-schedule turn detected. Ignoring stale itinerary.")
+
         graph_input = {
             "messages": [
                 {"role": m["role"], "content": m["content"]}
@@ -316,7 +331,7 @@ def process_user_input(user_text: str) -> None:
             "travel_date": st.session_state.get("travel_date"),
             "start_time": st.session_state.get("start_time"),
             "selected_places": current_selected, # 정제된 리스트 전달
-            "itinerary": st.session_state.get("itinerary", []),
+            "itinerary": current_itinerary,
             "mapped_places": current_mapped,
         }
 

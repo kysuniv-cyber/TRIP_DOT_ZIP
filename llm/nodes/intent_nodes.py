@@ -114,6 +114,14 @@ class intent_node():
         # intent_result = classify_intent_by_rule(user_text)
 
         # if intent_result == "general_chat":
+        intent_result = classify_intent_by_rule(user_text)
+        if intent_result.get("confidence", 0.0) >= 0.9:
+            return {
+                StateKeys.INTENT: intent_result["intent"],
+                StateKeys.CONFIDENCE: intent_result.get("confidence", 0.0),
+                StateKeys.ROUTE: intent_result["route"],
+            }
+
         logger.info("[LLM Path] Invoking OpenAI for intent analysis...")
         print("[DEBUG] Invoking OpenAI for intent analysis...")
         llm_result = self.chain.invoke({

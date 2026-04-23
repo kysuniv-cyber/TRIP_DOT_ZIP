@@ -142,12 +142,21 @@ class ChromaDBHandler():
         )
     def upsert(self, chunks: List[PlaceReviewChunkInfo], embeddings: List[List[float]]):
         """ 청크 리스트를 받아 Chroma DB에 일괄 적재 """
-        docs = [c.to_chroma_doc() for c in chunks]
+        deduped_pairs = {}
+        for chunk, embedding in zip(chunks, embeddings):
+            deduped_pairs[chunk.chunk_id] = (chunk, embedding)
+
+        if len(deduped_pairs) != len(chunks):
+            print(f"[DEBUG] Chroma upsert deduped: {len(chunks)} -> {len(deduped_pairs)}")
+
+        unique_chunks = [pair[0] for pair in deduped_pairs.values()]
+        unique_embeddings = [pair[1] for pair in deduped_pairs.values()]
+        docs = [c.to_chroma_doc() for c in unique_chunks]
         self.collection.upsert(
             ids        = [d["id"]       for d in docs],
             documents  = [d["document"] for d in docs],
             metadatas  = [d["metadata"] for d in docs],
-            embeddings = embeddings,
+            embeddings = unique_embeddings,
         )
 
 def make_chunk_id(place_id: str, review_name: str) -> str:
@@ -207,13 +216,22 @@ def parse_place_data(raw_data: dict) -> List[PlaceReviewChunkInfo]:
     chunks: List[PlaceReviewChunkInfo] = []
 
     for place in raw_data: 
-        place_id   = place["id"]
-        place_name = place["displayName"]["text"]
-        place_category = next((k for k, cats in PLACE_CATEGORY_MAP.items() if place["primaryType"] in cats), "default")
-        place_type = "indoor" if place["primaryType"] in INDOOR_TYPES else "outdoor"
+        place_id = place.get("id")
+        display_name = place.get("displayName", {})
+        location = place.get("location", {})
+        primary_type = place.get("primaryType", "")
+
+        if not place_id or "text" not in display_name:
+            continue
+        if "latitude" not in location or "longitude" not in location:
+            continue
+
+        place_name = display_name["text"]
+        place_category = next((k for k, cats in PLACE_CATEGORY_MAP.items() if primary_type in cats), "default")
+        place_type = "indoor" if primary_type in INDOOR_TYPES else "outdoor"
         place_rating = float(place.get("rating", 0))
-        lat = place["location"]["latitude"]
-        lng = place["location"]["longitude"]
+        lat = location["latitude"]
+        lng = location["longitude"]
 
         for review in place.get("reviews", []):
             raw_text = review.get("text", {}).get("text", "").strip()
