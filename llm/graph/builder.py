@@ -44,13 +44,12 @@ workflow.add_node("summary_node", summary_node)
 workflow.set_entry_point("safe_input_node")
 
 # Safety and summary middleware path
-workflow.add_edge("safe_input_node", "summary_node")
 workflow.add_conditional_edges(
     "safe_input_node",
     route_after_safety_check,
     {
         "blocked_response_node": "blocked_response_node",
-        "intent_router": "summary_node",
+        "summary_node": "summary_node",
     },
 )
 workflow.add_edge("blocked_response_node", END)

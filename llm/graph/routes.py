@@ -59,4 +59,4 @@ def route_after_safety_check(state: TravelAgentState):
     """
     if state.get(StateKeys.BLOCKED, False):
         return "blocked_response_node"
-    return "intent_router"
+    return "summary_node"
