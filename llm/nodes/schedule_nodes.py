@@ -16,10 +16,11 @@ def scheduler_node(state: TravelAgentState) -> dict:
     # scheduler_service가 기대하는 형태로 보정
     normalized_places = []
     for p in places:
+        metadata = p.get("metadata", {}) if isinstance(p, dict) else {}
         normalized_places.append({
             "name": p.get("name"),
-            "lat": p.get("lat"),
-            "lng": p.get("lng"),
+            "lat": p.get("lat") or metadata.get("place_lat"),
+            "lng": p.get("lng") or metadata.get("place_lng"),
             "types": [p.get("category", "default")] if p.get("category") else ["default"],
         })
 
@@ -33,7 +34,7 @@ def scheduler_node(state: TravelAgentState) -> dict:
     print("[DEBUG] scheduler_node places count =", len(places))
 
     itinerary_result = create_schedule(
-        places=places,
+        places=normalized_places,
         start_time_str=start_time,
     )
 

@@ -87,16 +87,8 @@ workflow.add_edge("place_search_node", "select_places_node")
 workflow.add_edge("select_places_node", "scheduler_node")
 
 # 검증 흐름
-workflow.add_edge("scheduler_node", "validate_node")
-workflow.add_conditional_edges(
-    "validate_node",
-    route_after_validation,
-    {
-        "place_node": "place_node",
-        "scheduler_node": "scheduler_node",
-        "response_node": "response_node"
-    }
-)
+# validate_node는 현재 prompt/분기 로직이 불안정해서
+# Streamlit 경로에서는 임시로 우회한다.
 
 # ask_user는 질문을 만든 뒤 종료
 workflow.add_edge("ask_user_node", END)
