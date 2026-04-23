@@ -53,7 +53,8 @@ def classify_intent_by_rule(user_text: str) -> IntentResult:
 
     modify_keywords = [
         "수정", "변경", "다시", "바꿔", "말고", "재추천", "다른 걸로",
-        "그거 말고", "일정 바꿔", "고쳐줘"
+        "그거 말고", "일정 바꿔", "고쳐줘",
+        "내일", "모레", "글피", "이번주", "다음주", "변경", "수정", "다시"
     ]
 
     travel_keywords = [

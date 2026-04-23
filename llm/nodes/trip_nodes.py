@@ -269,9 +269,29 @@ def modify_trip_requirements_node(state: TravelAgentState) -> dict:
         updates[StateKeys.TRAVEL_DATE] = None
         updates[StateKeys.RELATIVE_DAYS] = None
 
-    updates[StateKeys.MAPPED_PLACES] = []
-    updates[StateKeys.SELECTED_PLACES] = []
-    updates[StateKeys.ITINERARY] = []
+    # 1. 목적지(destination)가 바뀌었는지 확인
+    current_dest = state.get(StateKeys.DESTINATION)
+    # 현재 입력에서 새로 추출된 목적지가 있는지 확인
+    new_extracted_dest = _extract_destination(user_text)
+
+    if new_extracted_dest and new_extracted_dest != current_dest:
+        # 목적지가 새로 입력되었거나 변경된 경우에만 '장소 및 일정' 관련 데이터 초기화
+        updates[StateKeys.DESTINATION] = new_extracted_dest
+        updates[StateKeys.MAPPED_PLACES] = []
+        updates[StateKeys.SELECTED_PLACES] = []
+        updates[StateKeys.ITINERARY] = []
+        print(f"[DEBUG] Destination changed to {new_extracted_dest}. Resetting results.")
+    else:
+        # 목적지가 같거나("부산" 또 입력), 목적지 언급이 없는 경우("내일 갈래")
+        # 기존 데이터를 유지하기 위해 updates에 관련 키를 넣지 않음 (LangGraph는 누락된 키를 유지함)
+        pass
+
+    # 2. 날짜/스타일 업데이트 (추출된 결과가 있을 때만 updates에 포함)
+    if date_info.get("travel_date") or date_info.get("raw_date_text"):
+        # 날짜 정보 업데이트 시 기존 상대날짜 등은 밀어버림 (배타적 선택)
+        updates[StateKeys.TRAVEL_DATE] = date_info.get("travel_date")
+        updates[StateKeys.RAW_DATE_TEXT] = date_info.get("raw_date_text")
+        updates[StateKeys.RELATIVE_DAYS] = date_info.get("relative_days")
 
     print("[DEBUG] modify updates =", updates)
 

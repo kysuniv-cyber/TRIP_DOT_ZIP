@@ -293,6 +293,9 @@ def process_user_input(user_text: str) -> None:
             "constraints": st.session_state.get("constraints", []),
             "travel_date": st.session_state.get("travel_date"),
             "start_time": st.session_state.get("start_time"),
+            "selected_places": st.session_state.get("selected_places", []),
+            "itinerary": st.session_state.get("itinerary", []),
+            "mapped_places": st.session_state.get("mapped_places", []),
         }
 
         print("DEBUG: graph_app.invoke 직전")
@@ -301,18 +304,18 @@ def process_user_input(user_text: str) -> None:
         # 4. LangGraph 실행
         result = graph_app.invoke(graph_input)
 
-        # 4-1. 그래프 실행 결과로 업데이트된 상태를 Streamlit 세션에 다시 저장
-        # 이렇게 해야 다음 "내일 갈거야" 입력 때 세션에서 '부산'을 꺼내 넘겨줄 수 있습니다.
-        if result.get("destination"):
-            st.session_state["destination"] = result["destination"]
-        if result.get("styles"):
-            st.session_state["styles"] = result["styles"]
-        if result.get("constraints"):
-            st.session_state["constraints"] = result["constraints"]
-        if result.get("travel_date"):
-            st.session_state["travel_date"] = result["travel_date"]
-        if result.get("start_time"):
-            st.session_state["start_time"] = result["start_time"]
+        # 4-1. 그래프 실행 결과로 업데이트된 상태를 Streamlit 세션에 저장
+        # 필드가 존재하는지 확인하고, None이 아니면 덮어씁니다.
+        state_fields = [
+            "destination", "styles", "constraints", "travel_date",
+            "start_time", "selected_places", "mapped_places", "itinerary"
+        ]
+        for field in state_fields:
+            if field in result:  # result.get(field) 대신 키 존재 여부 확인
+                st.session_state[field] = result[field]
+
+        print(
+            f"DEBUG: Session Updated - dest={st.session_state.get('destination')}, places_cnt={len(st.session_state.get('selected_places', []))}")
 
         print("DEBUG: graph result =", result)
         print("DEBUG: final_response =", result.get("final_response"))

@@ -76,9 +76,20 @@ def get_integrated_search_results(user_query: str, k: int = 5):
     docs = retriever.invoke(user_query)
 
     search_results = []
+    seen_place_ids = set()  # 중복 체크용 셋
+
     for doc in docs:
+
+        # 장소 중복 체크용
+        place_id = doc.metadata.get("place_id")
+        if place_id in seen_place_ids:
+            continue
+        seen_place_ids.add(place_id)
+
+        # 리뷰 중복 체크용
         # page_content가 없거나 비어있을 경우를 대비해 기본값 "" 설정
         review_text = doc.page_content if hasattr(doc, 'page_content') else ""
+
         search_results.append({
             "name": doc.metadata.get("place_name"),         # 'place_name'을 'name'으로 매핑
             "category": doc.metadata.get("place_category"), # 'place_category'를 'category'로 매핑
