@@ -79,11 +79,15 @@ def get_integrated_search_results(user_query: str, k: int = 5):
     # 6. 결과 가공
     search_results = []
     for doc in docs:
+        # page_content가 없거나 비어있을 경우를 대비해 기본값 "" 설정
+        review_text = doc.page_content if hasattr(doc, 'page_content') else ""
         search_results.append({
-            "name": doc.metadata.get("place_name"),
-            "category": doc.metadata.get("place_category"),
-            "text": doc.page_content,
-            "metadata": doc.metadata
+            "name": doc.metadata.get("place_name"),         # 'place_name'을 'name'으로 매핑
+            "category": doc.metadata.get("place_category"), # 'place_category'를 'category'로 매핑
+            "text": review_text,                            # 안전하게 가공된 리뷰 본문
+            "address": doc.metadata.get("place_address"),   # 주소 (필요시 사용)
+            "rating": doc.metadata.get("place_rating"),     # 별점 (필요시 사용)
+            "metadata": doc.metadata                        # 전체 메타데이터 백업
         })
 
     return search_results
