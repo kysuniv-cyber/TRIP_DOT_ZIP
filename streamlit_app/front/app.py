@@ -36,7 +36,7 @@ if str(PROJECT_ROOT) not in sys.path:
 # =========================
 # 내부 모듈 import
 # =========================
-from streamlit_app.back.session_state import init_state
+from streamlit_app.back.session_state import ensure_chat_slot_system, init_state
 from streamlit_app.back.chat_logic import initialize_greeting
 from streamlit_app.front.ui import (
     load_css,
@@ -60,6 +60,7 @@ st.set_page_config(
 # =========================
 load_css()
 init_state()
+ensure_chat_slot_system()
 
 # =========================
 # 1. 사용자 프로필 입력 단계

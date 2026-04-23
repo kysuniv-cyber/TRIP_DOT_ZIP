@@ -1,19 +1,9 @@
 """
 session_state.py
-
-Streamlit 앱에서 사용하는 전역 상태(session_state)를 관리하는 모듈이다.
-
-주요 역할:
-- 채팅 메시지 및 UI 상태 초기화
-- 사용자 프로필 관리
-- 여행 정보(destination, date 등) 추출 및 저장
-- LLM 프롬프트에 사용할 사용자 persona 컨텍스트 생성
-
-이 파일은 Streamlit의 st.session_state를 기반으로
-앱 전반에서 공유되는 데이터를 일관되게 관리한다.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import os
 import re
@@ -24,7 +14,6 @@ import mysql.connector
 import streamlit as st
 from dotenv import load_dotenv
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -33,27 +22,38 @@ MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "tripdotzip")
 
+CHAT_SLOT_IDS = ("chat_1", "chat_2")
+CHAT_STATE_KEYS = (
+    "messages",
+    "quick_buttons",
+    "initialized",
+    "pending_input",
+    "trip_info",
+    "destination",
+    "styles",
+    "constraints",
+    "travel_date",
+    "start_time",
+    "selected_places",
+    "mapped_places",
+    "itinerary",
+)
+
 
 def now_label() -> str:
-    """
-    현재 시간을 HH:MM 형식으로 반환한다.
-
-    Returns:
-        str: 현재 시각 (예: "14:23")
-    """
     return datetime.now().strftime("%H:%M")
 
 
+def default_trip_info() -> dict:
+    return {
+        "destination": "미정",
+        "date": "미정",
+        "people": "미정",
+        "style": "미정",
+    }
+
+
 def ensure_profile_database() -> None:
-    """
-    프로필 저장용 MySQL 데이터베이스가 없으면 생성한다.
-
-    `.env`에 설정된 MySQL 접속 정보를 사용하며,
-    앱 시작 후 프로필 저장/불러오기 전에 한 번 호출된다.
-
-    Returns:
-        None
-    """
     conn = mysql.connector.connect(
         host=MYSQL_HOST,
         user=MYSQL_USER,
@@ -73,13 +73,6 @@ def ensure_profile_database() -> None:
 
 
 def get_profile_db_connection():
-    """
-    프로필 저장에 사용할 MySQL 연결을 생성하고 테이블을 보장한다.
-
-    Returns:
-        mysql.connector.connection.MySQLConnection:
-            `persona_profiles` 테이블이 준비된 DB 연결 객체
-    """
     ensure_profile_database()
     conn = mysql.connector.connect(
         host=MYSQL_HOST,
@@ -105,15 +98,6 @@ def get_profile_db_connection():
 
 
 def list_saved_profiles() -> list[dict]:
-    """
-    저장된 프로필 목록을 최신 수정 순으로 조회한다.
-
-    프로필 선택 UI에서는 전체 JSON 대신 요약 정보만 사용하므로
-    profile_id, nickname, updated_at만 반환한다.
-
-    Returns:
-        list[dict]: 저장된 프로필 요약 목록
-    """
     conn = get_profile_db_connection()
     try:
         cursor = conn.cursor()
@@ -135,15 +119,6 @@ def list_saved_profiles() -> list[dict]:
 
 
 def load_profile_from_db(profile_id: str) -> dict | None:
-    """
-    profile_id로 저장된 프로필 전체 JSON을 불러온다.
-
-    Args:
-        profile_id (str): 불러올 프로필 식별자
-
-    Returns:
-        dict | None: 저장된 프로필 정보, 없으면 None
-    """
     conn = get_profile_db_connection()
     try:
         cursor = conn.cursor()
@@ -165,17 +140,6 @@ def load_profile_from_db(profile_id: str) -> dict | None:
 
 
 def save_profile_to_db(profile: dict) -> None:
-    """
-    프로필 정보를 MySQL에 저장하거나 같은 id의 기존 프로필을 갱신한다.
-
-    채팅 내용은 저장하지 않고, 프로필 입력 폼에서 받은 사용자 정보만 저장한다.
-
-    Args:
-        profile (dict): 저장할 사용자 프로필 정보
-
-    Returns:
-        None
-    """
     profile_id = profile["profile_id"]
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -203,22 +167,130 @@ def save_profile_to_db(profile: dict) -> None:
         conn.close()
 
 
+def build_empty_chat_slot(slot_id: str, title: str) -> dict:
+    return {
+        "slot_id": slot_id,
+        "title": title,
+        "messages": [],
+        "quick_buttons": [],
+        "initialized": False,
+        "pending_input": None,
+        "trip_info": default_trip_info(),
+        "destination": None,
+        "styles": [],
+        "constraints": [],
+        "travel_date": None,
+        "start_time": None,
+        "selected_places": [],
+        "mapped_places": [],
+        "itinerary": [],
+    }
+
+
+def _copy_slot_payload(slot: dict) -> dict:
+    return {key: deepcopy(slot.get(key)) for key in CHAT_STATE_KEYS}
+
+
+def _capture_current_chat_state() -> dict:
+    return {key: deepcopy(st.session_state.get(key)) for key in CHAT_STATE_KEYS}
+
+
+def _derive_chat_slot_title(slot: dict, fallback: str) -> str:
+    for message in slot.get("messages", []):
+        if message.get("role") == "user":
+            text = str(message.get("content", "")).strip()
+            if text:
+                return text[:18] + ("..." if len(text) > 18 else "")
+    return fallback
+
+
+def sync_active_chat_slot() -> None:
+    slot_id = st.session_state.get("active_chat_slot", CHAT_SLOT_IDS[0])
+    slots = st.session_state.get("chat_slots", {})
+    if slot_id not in slots:
+        return
+
+    slot = deepcopy(slots[slot_id])
+    slot.update(_capture_current_chat_state())
+    fallback = "현재 대화" if slot_id == CHAT_SLOT_IDS[0] else "보관 대화"
+    slot["title"] = _derive_chat_slot_title(slot, fallback)
+    slots[slot_id] = slot
+    st.session_state.chat_slots = slots
+
+
+def switch_chat_slot(slot_id: str) -> None:
+    if slot_id not in CHAT_SLOT_IDS:
+        return
+
+    if "chat_slots" not in st.session_state:
+        return
+
+    sync_active_chat_slot()
+    slot = deepcopy(st.session_state.chat_slots[slot_id])
+    for key, value in _copy_slot_payload(slot).items():
+        st.session_state[key] = value
+    st.session_state.active_chat_slot = slot_id
+
+
+def get_chat_slot_items() -> list[dict]:
+    slots = st.session_state.get("chat_slots", {})
+    items = []
+    for slot_id in CHAT_SLOT_IDS:
+        fallback = "현재 대화" if slot_id == CHAT_SLOT_IDS[0] else "보관 대화"
+        slot = slots.get(slot_id, build_empty_chat_slot(slot_id, fallback))
+        items.append(
+            {
+                "slot_id": slot_id,
+                "title": slot.get("title") or fallback,
+                "message_count": len(slot.get("messages", [])),
+                "active": st.session_state.get("active_chat_slot") == slot_id,
+            }
+        )
+    return items
+
+
+def ensure_chat_slot_system() -> None:
+    if "active_chat_slot" not in st.session_state:
+        st.session_state.active_chat_slot = CHAT_SLOT_IDS[0]
+
+    if "chat_slots" not in st.session_state:
+        st.session_state.chat_slots = {
+            CHAT_SLOT_IDS[0]: build_empty_chat_slot(CHAT_SLOT_IDS[0], "현재 대화"),
+            CHAT_SLOT_IDS[1]: build_empty_chat_slot(CHAT_SLOT_IDS[1], "보관 대화"),
+        }
+
+    for key, default in {
+        "destination": None,
+        "styles": [],
+        "constraints": [],
+        "travel_date": None,
+        "start_time": None,
+        "selected_places": [],
+        "mapped_places": [],
+        "itinerary": [],
+    }.items():
+        if key not in st.session_state:
+            st.session_state[key] = deepcopy(default)
+
+    if "_chat_slots_ready" not in st.session_state:
+        st.session_state._chat_slots_ready = True
+        slot = deepcopy(st.session_state.chat_slots[st.session_state.active_chat_slot])
+        for key, value in _copy_slot_payload(slot).items():
+            st.session_state[key] = value
+    else:
+        sync_active_chat_slot()
+
+
+def clear_active_chat_slot() -> None:
+    slot_id = st.session_state.get("active_chat_slot", CHAT_SLOT_IDS[0])
+    title = "현재 대화" if slot_id == CHAT_SLOT_IDS[0] else "보관 대화"
+    empty_slot = build_empty_chat_slot(slot_id, title)
+    st.session_state.chat_slots[slot_id] = empty_slot
+    for key, value in _copy_slot_payload(empty_slot).items():
+        st.session_state[key] = value
+
+
 def init_state() -> None:
-    """
-    Streamlit session_state를 초기화한다.
-
-    필요한 기본 상태값들을 정의하고,
-    아직 존재하지 않는 key에 대해서만 값을 세팅한다.
-
-    주요 상태:
-        - messages: 채팅 메시지 목록
-        - quick_buttons: 빠른 선택 버튼
-        - trip_info: 여행 정보
-        - user_profile: 사용자 프로필
-
-    Returns:
-        None
-    """
     defaults = {
         "messages": [],
         "quick_buttons": [],
@@ -226,77 +298,35 @@ def init_state() -> None:
         "pending_input": None,
         "user_profile_completed": False,
         "user_profile": {},
-        "trip_info": {
-            "destination": "미정",
-            "date": "미정",
-            "people": "미정",
-            "style": "미정",
-        },
+        "trip_info": default_trip_info(),
         "history_items": [
-            ("대만 타이페이 3박 4일", "2025.12.20"),
-            ("제주도 힐링 여행 2박 3일", "2025.09.15"),
-            ("부산 해운대 당일치기", "2025.07.08"),
+            ("대만 타이페이 3박4일", "2025.12.20"),
+            ("제주도 맛집 여행 2박3일", "2025.09.15"),
+            ("부산 해운대 힐링", "2025.07.08"),
         ],
     }
-
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
 
 def reset_session_state() -> None:
-    """
-    채팅 및 여행 정보를 초기 상태로 리셋한다.
-
-    Returns:
-        None
-    """
-    st.session_state.messages = []
-    st.session_state.quick_buttons = []
-    st.session_state.initialized = False
-    st.session_state.pending_input = None
-    st.session_state.trip_info = {
-        "destination": "미정",
-        "date": "미정",
-        "people": "미정",
-        "style": "미정",
-    }
+    clear_active_chat_slot()
 
 
 def reset_user_profile() -> None:
-    """
-    사용자 프로필을 초기화하고 전체 세션도 리셋한다.
-
-    Returns:
-        None
-    """
     st.session_state.user_profile = {}
     st.session_state.user_profile_completed = False
-    reset_session_state()
+    clear_active_chat_slot()
 
 
 def format_list_value(values: list[str] | None) -> str:
-    """
-    리스트 형태 값을 문자열로 변환한다.
-
-    Args:
-        values (list[str] | None): 문자열 리스트
-
-    Returns:
-        str: "A, B, C" 형식 문자열 또는 "선택 안 함"
-    """
     if not values:
-        return "선택 안 함"
+        return "선택 안함"
     return ", ".join(values)
 
 
 def build_persona_context() -> str:
-    """
-    사용자 프로필 정보를 기반으로 LLM 프롬프트용 컨텍스트를 생성한다.
-
-    Returns:
-        str: 사용자 프로필 요약 텍스트
-    """
     profile = st.session_state.get("user_profile", {})
     if not profile:
         return ""
@@ -305,89 +335,71 @@ def build_persona_context() -> str:
     avoid_styles = format_list_value(profile.get("avoid_styles", []))
 
     return f"""
-사용자 프로필:
+사용자 프로필
 - 닉네임: {profile.get("nickname", "사용자")}
-- 나이대: {profile.get("age_group", "선택 안 함")}
-- 성별: {profile.get("gender", "선택 안 함")}
-- 주요 동행자: {profile.get("companion", "선택 안 함")}
+- 연령대: {profile.get("age_group", "선택 안함")}
+- 성별: {profile.get("gender", "선택 안함")}
+- 주요 동행: {profile.get("companion", "선택 안함")}
 - 선호 여행 스타일: {travel_styles}
 - 피하고 싶은 요소: {avoid_styles}
-- 이동 강도: {profile.get("pace", "선택 안 함")}
-- 실내/실외 선호: {profile.get("indoor_outdoor", "선택 안 함")}
+- 이동 강도: {profile.get("pace", "선택 안함")}
+- 실내/실외 선호: {profile.get("indoor_outdoor", "선택 안함")}
 
-위 프로필은 여행 추천 개인화에만 참고한다.
+이 프로필은 여행 추천 개인화에만 참고한다.
 사용자의 현재 대화 요청과 충돌하면 현재 요청을 우선한다.
-민감한 개인정보를 답변에 불필요하게 반복하지 않는다.
 """.strip()
 
 
 def update_trip_info(user_text: str) -> None:
-    """
-    사용자 입력에서 여행 정보를 추출하여 session_state에 업데이트한다.
-
-    Args:
-        user_text (str): 사용자 입력 문장
-
-    Returns:
-        None
-    """
     info = st.session_state.trip_info
     text = user_text.strip()
 
-    # =========================
-    # 1. 목적지 추출
-    # =========================
     destinations = [
         "강릉", "서울", "부산", "제주", "제주도", "속초", "여수", "경주", "전주",
-        "대구", "인천", "대전", "광주", "성수", "홍대", "대만", "타이페이", "일본", "오사카",
+        "대구", "인천", "대전", "광주", "성수", "남해", "대만", "타이페이", "일본", "오사카",
     ]
     for destination in destinations:
         if destination in text:
             info["destination"] = "제주도" if destination == "제주" else destination
             break
 
-    # =========================
-    # 2. 날짜 추출
-    # =========================
     date_patterns = [
-        r"(\d{4})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})",
+        r"(\d{4})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})",
         r"(\d{1,2})\s*월\s*(\d{1,2})\s*일",
         r"(\d{1,2})[.\-/](\d{1,2})",
     ]
     for pattern in date_patterns:
         matched = re.search(pattern, text)
-        if matched:
-            groups = matched.groups()
-            if len(groups) == 3:
+        if not matched:
+            continue
+        groups = matched.groups()
+        if len(groups) == 3:
+            if len(groups[0]) == 4:
                 info["date"] = f"{groups[0]}.{int(groups[1]):02d}.{int(groups[2]):02d}"
             else:
-                info["date"] = f"{int(groups[0])}월 {int(groups[1])}일"
-            break
+                current_year = datetime.now().year
+                info["date"] = f"{current_year}.{int(groups[0]):02d}.{int(groups[1]):02d}"
+        elif len(groups) == 2:
+            current_year = datetime.now().year
+            info["date"] = f"{current_year}.{int(groups[0]):02d}.{int(groups[1]):02d}"
+        break
 
-    # =========================
-    # 3. 인원 추출
-    # =========================
-    people_match = re.search(r"(\d+)\s*(명|인|명이요|명이)", text)
-    if people_match:
-        info["people"] = f"{people_match.group(1)}명"
-
-    # =========================
-    # 4. 여행 스타일 추출
-    # =========================
-    style_keywords = {
-        "휴식": "휴식형",
-        "힐링": "휴식형",
-        "카페": "카페 투어",
-        "맛집": "먹방 여행",
-        "먹방": "먹방 여행",
-        "액티비티": "액티비티",
-        "문화": "문화 탐방",
-        "역사": "문화 탐방",
-        "실내": "실내 위주",
-        "바다": "바다 여행",
-        "사진": "사진 명소",
+    companions = {
+        "혼자": "혼자",
+        "친구": "친구",
+        "연인": "연인",
+        "가족": "가족",
+        "부모님": "부모님",
+        "아이": "아이 동반",
     }
-    for keyword, style in style_keywords.items():
+    for keyword, label in companions.items():
         if keyword in text:
-            info["style"] = style
+            info["people"] = label
             break
+
+    styles = []
+    for keyword in ["맛집", "카페", "쇼핑", "전시", "자연", "실내", "액티비티", "휴식"]:
+        if keyword in text:
+            styles.append(keyword)
+    if styles:
+        info["style"] = ", ".join(styles)

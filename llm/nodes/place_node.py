@@ -52,6 +52,7 @@ def get_places_by_api(destination:str, constraints: List[str], search_task:List[
 
             # API 결과값에서 결과 place 정보
             result_places = []
+            seen_place_ids = set()
             
             for task in search_task:
                 # print(f"DEBUG: {task}")
@@ -72,8 +73,13 @@ def get_places_by_api(destination:str, constraints: List[str], search_task:List[
                 response = requests.post(url, json=payload, headers=headers)
                 
                 if response.status_code == 200:
-                    data = response.json().get("places") 
-                    result_places.extend(data)
+                    data = response.json().get("places") or []
+                    for place in data:
+                        place_id = place.get("id")
+                        if not place_id or place_id in seen_place_ids:
+                            continue
+                        seen_place_ids.add(place_id)
+                        result_places.append(place)
 
                     # print(f'DEBUG R: {len(result_places[0])}')
                 else:

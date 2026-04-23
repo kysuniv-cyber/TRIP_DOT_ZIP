@@ -32,8 +32,7 @@ shared_llm = ChatOpenAI(model="gpt-4o-mini", temperature=1.0)
 intent_node_instance = intent_node(shared_llm)
 
 # Register nodes
-# workflow.add_node("intent_router", route_intent_node)     # llm 붙이기 전 0424 주석처리
-workflow.add_node("intent_router", intent_node_instance)    # llm 붙인 후 0424 추가
+workflow.add_node("intent_router", route_intent_node)
 workflow.add_node("extract_trip_requirements_node", extract_trip_requirements_node)
 workflow.add_node("check_missing_info_node", check_missing_info_node)
 workflow.add_node("ask_user_node", ask_user_for_missing_info_node)
