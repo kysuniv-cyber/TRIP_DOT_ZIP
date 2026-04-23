@@ -23,7 +23,7 @@ BAD_WORDS = [
     "씨발", "시발", "ㅅㅂ",
     "병신", "븅신", "ㅄ",
     "개새끼", "ㅈ같", "좆", "fuck",
-    "존나"
+    "존나", "죽어", "죽일거야", "죽을래"
 ]
 
 # =========================
@@ -47,6 +47,8 @@ def contains_bad_word(text: str) -> bool:
     Returns:
         bool: 욕설이 포함되어 있으면 True, 아니면 False
     """
+    normalized = re.sub(r"\s+", "", text.lower())
+    return any(bad in normalized for bad in BAD_WORDS)
 
 # =========================
 # 2. Moderation API 호출
@@ -119,6 +121,8 @@ def should_block(client: OpenAI, text: str) -> bool:
     Returns:
         bool: 차단이 필요하면 True, 아니면 False
     """
+    bad_word_hit = contains_bad_word(text)
+
     if contains_bad_word(text):
         print("⚠️ bad word 감지: soft 필터 적용 예정, moderation도 계속 실행")
 
@@ -129,7 +133,7 @@ def should_block(client: OpenAI, text: str) -> bool:
     print("🔍 moderation scores:", mod["scores"])
 
 
-    return should_block_by_score(mod["scores"])
+    return bad_word_hit or should_block_by_score(mod["scores"])
 
 
 # =========================
@@ -168,13 +172,8 @@ def profanity_middleware(openai_client: OpenAI):
             raise ValueError("땃쥐가 상처받아 뒤돌았습니다.")
 
         if contains_bad_word(full_text):
-            print("⚠️ 욕설 감지됨")
-            for msg in request.messages:
-                if msg.get("role") == "user" and isinstance(msg.get("content"), str):
-                    msg["content"] = f"[주의: 과격한 표현 포함]\n{msg['content']}"
-            request.metadata["profanity_detected"] = True
-        else:
-            request.metadata["profanity_detected"] = False
+            print("🚫 욕설 차단됨")
+            raise ValueError("땃쥐가 상처받아 뒤돌았습니다.")
 
         return next_(request)
 
