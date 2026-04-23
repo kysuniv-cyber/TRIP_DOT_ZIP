@@ -11,9 +11,22 @@ def _extract_destination(user_text: str) -> str | None:
         "속초", "춘천", "포항", "창원", "성수", "남해", "울릉도",
     ]
 
+    # 1. 시/도 단위 먼저 체크
     for place in known_destinations:
         if place in user_text:
             return place
+
+    # 2. 해운대, 광안리 등 특정 지역 키워드가 들어왔을 때 상위 도시로 매핑하는 로직
+    sub_locations = {
+        "해운대": "부산",
+        "광안리": "부산",
+        "서면": "부산",
+        "명동": "서울",
+        "강남": "서울"
+    }
+    for sub, main in sub_locations.items():
+        if sub in user_text:
+            return main
 
     return None
 
@@ -50,7 +63,6 @@ def _extract_constraints(user_text: str) -> list[str]:
         "family": ["가족", "가족여행"],
         "parents": ["부모님", "부모님과", "모시고"],
         "kids": ["아이", "아이와", "아이 동반", "아기"],
-        "haeundae": ["해운대"],
         "1박2일": ["1박2일", "1박 2일"],
         "2박3일": ["2박3일", "2박 3일"],
     }
