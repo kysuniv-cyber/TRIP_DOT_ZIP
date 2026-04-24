@@ -1,0 +1,17 @@
+[
+    {
+        "id": "ChIJNc0j6G3raDURpwhxJHTL2DU",
+        "types": [
+            "locality",
+            "political"
+        ],
+        "location": {
+            "latitude": 35.173112100000004,
+            "longitude": 129.0714122
+        },
+        "displayName": {
+            "text": "부산광역시",
+            "languageCode": "ko"
+        }
+    }
+]
