@@ -29,6 +29,7 @@ MOUSE_ICON_IMAGE = PROJECT_ROOT / "assets" / "tripdotzip_mouse_icon.png"
 
 
 def load_css() -> None:
+    # 프론트 전용 CSS를 읽어 페이지에 주입합니다.
     css_path = BASE_DIR / "front" / "tripdotzip.css"
     if not css_path.exists():
         css_path = PROJECT_ROOT / "tripdotzip.css"
@@ -41,6 +42,7 @@ def load_css() -> None:
 
 @st.cache_data
 def image_data_uri(path_text: str) -> str:
+    # 로컬 이미지를 base64 data URI로 바꿔 HTML img 태그에서 바로 사용합니다.
     path = Path(path_text)
     if not path.exists():
         return ""
@@ -49,6 +51,7 @@ def image_data_uri(path_text: str) -> str:
 
 
 def render_profile_setup() -> None:
+    # 최초 진입 시 사용자 프로필을 입력하거나 저장된 프로필을 불러옵니다.
     st.markdown(
         """
         <div class="chat-header">
@@ -128,6 +131,7 @@ def render_profile_setup() -> None:
 
 
 def render_message(message: dict) -> None:
+    # 역할에 따라 아바타와 말풍선 스타일을 다르게 렌더링합니다.
     role = message["role"]
     wrapper_class = "user" if role == "user" else ""
     avatar_class = "user" if role == "user" else "bot"
@@ -151,6 +155,7 @@ def render_message(message: dict) -> None:
 
 
 def render_loading_message() -> None:
+    # 응답 생성 중에는 캐릭터형 로딩 말풍선을 보여줍니다.
     image_src = image_data_uri(str(GUIDE_MOUSE_IMAGE))
     st.markdown(
         f"""
@@ -173,6 +178,7 @@ def render_loading_message() -> None:
 
 
 def render_info_card(icon: str, label: str, value: str) -> None:
+    # 사이드바 정보 카드를 공통 형식으로 출력합니다.
     st.markdown(
         f"""
         <div class="info-card">
@@ -188,6 +194,7 @@ def render_info_card(icon: str, label: str, value: str) -> None:
 
 
 def render_left_panel() -> None:
+    # 현재 여행 조건, 프로필, 채팅 전환 UI를 사이드바에 그립니다.
     info = st.session_state.trip_info
     mouse_icon = image_data_uri(str(MOUSE_ICON_IMAGE))
 
@@ -238,6 +245,7 @@ def render_left_panel() -> None:
 
 
 def render_intro() -> None:
+    # 대화가 비어 있을 때만 첫 화면 소개 헤더를 노출합니다.
     if st.session_state.messages:
         return
 
@@ -253,6 +261,7 @@ def render_intro() -> None:
 
 
 def render_chat_area() -> None:
+    # 채팅 메시지, 빠른 선택 버튼, 입력창을 메인 영역에 렌더링합니다.
     st.markdown('<div class="chat-stage">', unsafe_allow_html=True)
     render_intro()
 

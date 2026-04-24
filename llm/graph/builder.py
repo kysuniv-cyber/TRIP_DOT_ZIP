@@ -22,7 +22,7 @@ from llm.nodes.safety_nodes import safe_input_node
 from llm.nodes.summary_nodes import summary_node
 from llm.nodes.intent_nodes import route_intent_node, intent_node
 
-# Initialize graph
+# 그래프 상태 머신 초기화
 workflow = StateGraph(TravelAgentState)
 
 # 공용 LLM 하나만 생성
@@ -31,7 +31,7 @@ shared_llm = ChatOpenAI(model="gpt-4o-mini", temperature=1.0)
 # 노드 등록 시 인스턴스화해서 전달
 intent_node_instance = intent_node(shared_llm)
 
-# Register nodes
+# 그래프 노드 등록
 workflow.add_node("intent_router", route_intent_node)
 workflow.add_node("extract_trip_requirements_node", extract_trip_requirements_node)
 workflow.add_node("check_missing_info_node", check_missing_info_node)
@@ -48,10 +48,10 @@ workflow.add_node("safe_input_node", safe_input_node)
 workflow.add_node("blocked_response_node", blocked_response_node)
 workflow.add_node("summary_node", summary_node)
 
-# Graph entry
+# 그래프 시작 노드 지정
 workflow.set_entry_point("safe_input_node")
 
-# Safety and summary middleware path
+# 안전성 검사와 요약 경로 연결
 workflow.add_conditional_edges(
     "safe_input_node",
     route_after_safety_check,
@@ -63,11 +63,11 @@ workflow.add_conditional_edges(
 workflow.add_edge("blocked_response_node", END)
 workflow.add_edge("summary_node", "intent_router")
 
-# Extract user travel requirements
+# 사용자 여행 조건 추출 단계 연결
 workflow.add_edge("intent_router", "extract_trip_requirements_node")
 workflow.add_edge("extract_trip_requirements_node", "check_missing_info_node")
 
-# Route after checking whether required fields are missing
+# 필수 정보 누락 여부에 따라 다음 경로 분기
 workflow.add_conditional_edges(
     "check_missing_info_node",
     route_after_missing_check,
@@ -83,18 +83,18 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("modify_node", "place_node")
 
-# Place search -> place selection -> schedule generation
+# 장소 검색 -> 장소 선택 -> 일정 생성 흐름
 workflow.add_edge("place_node", "place_search_node")
 workflow.add_edge("place_search_node", "select_places_node")
 workflow.add_edge("select_places_node", "scheduler_node")
 
-# Validation is intentionally bypassed for now because the current
-# prompt/branching logic is unstable in the Streamlit execution path.
+# 검증 노드는 현재 Streamlit 실행 경로에서 분기 안정성이 낮아
+# 실제 흐름에서는 일단 우회한 상태로 둡니다.
 
-# Asking for missing info ends the current turn.
+# 누락 정보 질문은 해당 턴에서 종료
 workflow.add_edge("ask_user_node", END)
 
-# Final response edges
+# 최종 응답 노드 연결
 workflow.add_edge("weather_node", "response_node")
 workflow.add_edge("scheduler_node", "response_node")
 workflow.add_edge("response_node", END)
