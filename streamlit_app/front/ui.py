@@ -10,6 +10,7 @@ from pathlib import Path
 import streamlit as st
 
 from streamlit_app.back.chat_logic import process_user_input
+from streamlit_app.front.map_result import render_confirmed_plan
 from streamlit_app.back.session_state import (
     clear_active_chat_slot,
     format_list_value,
@@ -238,6 +239,18 @@ def render_left_panel() -> None:
         clear_active_chat_slot()
         st.rerun()
 
+    st.markdown('<div class="side-title">일정 확정</div>', unsafe_allow_html=True)
+    has_itinerary = bool(st.session_state.get("itinerary"))
+
+    if st.button("일정 확정", use_container_width=True, disabled=not has_itinerary):
+        # 현재 생성된 일정을 확정 화면에서 그대로 보여주기 위해 별도 상태에 저장합니다.
+        st.session_state.confirmed_itinerary = list(st.session_state.get("itinerary", []))
+        st.session_state.show_confirmed_plan = True
+        st.rerun()
+
+    if not has_itinerary:
+        st.caption("일정이 생성되면 확정 버튼을 누를 수 있습니다.")
+
 
 def render_intro() -> None:
     if st.session_state.messages:
@@ -271,6 +284,10 @@ def render_chat_area() -> None:
                 if st.button(label, key=f"quick_{idx}", use_container_width=True):
                     st.session_state.pending_input = label
                     st.rerun()
+
+    if st.session_state.get("show_confirmed_plan"):
+        # 확정된 일정은 채팅 아래에서 표와 지도를 함께 보여줍니다.
+        render_confirmed_plan()
 
     user_input = st.chat_input("여행에 대해 무엇이든 물어보세요...")
     if user_input and user_input.strip():

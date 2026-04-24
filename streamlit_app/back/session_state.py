@@ -33,6 +33,8 @@ CHAT_STATE_KEYS = (
     "selected_places",
     "mapped_places",
     "itinerary",
+    "show_confirmed_plan",
+    "confirmed_itinerary",
 )
 
 
@@ -65,6 +67,8 @@ def build_empty_chat_slot(slot_id: str, title: str) -> dict:
         "selected_places": [],
         "mapped_places": [],
         "itinerary": [],
+        "show_confirmed_plan": False,
+        "confirmed_itinerary": [],
     }
 
 
@@ -149,6 +153,8 @@ def ensure_chat_slot_system() -> None:
         "selected_places": [],
         "mapped_places": [],
         "itinerary": [],
+        "show_confirmed_plan": False,
+        "confirmed_itinerary": [],
     }.items():
         if key not in st.session_state:
             st.session_state[key] = deepcopy(default)
@@ -180,6 +186,8 @@ def init_state() -> None:
         "user_profile_completed": False,
         "user_profile": {},
         "trip_info": default_trip_info(),
+        "show_confirmed_plan": False,
+        "confirmed_itinerary": [],
         "history_items": [
             ("대만 타이페이 3박4일", "2025.12.20"),
             ("제주도 맛집 여행 2박3일", "2025.09.15"),
