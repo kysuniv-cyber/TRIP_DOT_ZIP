@@ -167,7 +167,7 @@ def count_text_chars(messages: list[dict]) -> int:
 def conversation_summary_middleware(
     openai_client: OpenAI,
     trigger_char_count: int = 1000,
-    keep_last_n: int = 4,
+    keep_last_n: int = 5,
 ):
     """대화 요약을 수행하는 미들웨어를 생성한다.
 
