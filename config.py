@@ -18,6 +18,12 @@ class Settings:
     CHROMA_PERSIST_DIR: str = os.path.join(os.getcwd(), "data", "chroma")
     CHROMA_COLLECTION_NAME: str = "place_reviews"
 
+    # MySQL DB 설정
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+    MYSQL_USER = os.getenv("MYSQL_USER", "root")
+    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "tripdotzip")
+
     def validate(self) -> None:
         if not self.openai_api_key:
             raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")

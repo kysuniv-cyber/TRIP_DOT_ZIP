@@ -9,18 +9,14 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
+from config import Settings
 
-import mysql.connector
 import streamlit as st
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(PROJECT_ROOT / ".env")
+# PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# load_dotenv(PROJECT_ROOT / ".env")
 
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "tripdotzip")
 
 CHAT_SLOT_IDS = ("chat_1", "chat_2")
 CHAT_STATE_KEYS = (
@@ -51,121 +47,6 @@ def default_trip_info() -> dict:
         "people": "미정",
         "style": "미정",
     }
-
-
-def ensure_profile_database() -> None:
-    conn = mysql.connector.connect(
-        host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
-        auth_plugin="mysql_native_password",
-        use_pure=True,
-    )
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            f"CREATE DATABASE IF NOT EXISTS `{MYSQL_DATABASE}` "
-            "CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def get_profile_db_connection():
-    ensure_profile_database()
-    conn = mysql.connector.connect(
-        host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
-        database=MYSQL_DATABASE,
-        auth_plugin="mysql_native_password",
-        use_pure=True,
-    )
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS persona_profiles (
-            profile_id VARCHAR(255) PRIMARY KEY,
-            nickname VARCHAR(255) NOT NULL,
-            profile_json JSON NOT NULL,
-            updated_at DATETIME NOT NULL
-        )
-        """
-    )
-    conn.commit()
-    return conn
-
-
-def list_saved_profiles() -> list[dict]:
-    conn = get_profile_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT profile_id, nickname, updated_at
-            FROM persona_profiles
-            ORDER BY updated_at DESC
-            """
-        )
-        rows = cursor.fetchall()
-    finally:
-        conn.close()
-
-    return [
-        {"profile_id": row[0], "nickname": row[1], "updated_at": str(row[2])}
-        for row in rows
-    ]
-
-
-def load_profile_from_db(profile_id: str) -> dict | None:
-    conn = get_profile_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT profile_json FROM persona_profiles WHERE profile_id = %s",
-            (profile_id,),
-        )
-        row = cursor.fetchone()
-    finally:
-        conn.close()
-
-    if not row:
-        return None
-
-    payload = row[0]
-    if isinstance(payload, (bytes, bytearray)):
-        payload = payload.decode("utf-8")
-    return json.loads(payload)
-
-
-def save_profile_to_db(profile: dict) -> None:
-    profile_id = profile["profile_id"]
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    conn = get_profile_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO persona_profiles (profile_id, nickname, profile_json, updated_at)
-            VALUES (%s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                nickname = VALUES(nickname),
-                profile_json = VALUES(profile_json),
-                updated_at = VALUES(updated_at)
-            """,
-            (
-                profile_id,
-                profile.get("nickname", "사용자"),
-                json.dumps(profile, ensure_ascii=False),
-                now,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
 
 def build_empty_chat_slot(slot_id: str, title: str) -> dict:
     return {

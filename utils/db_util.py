@@ -1,7 +1,7 @@
 """
     FileName: db_util.py
     Location: utils/db_util.py
-    Role: DB 관련 객체인데.. 이걸 유틸로 해도 되나.
+    Role: Vector DB 관리 객체 및 관련 함수
         PlaceReviewChunkInfo 모델 정의, 데이터 전처리, ChromaDB 연결 및 적재 로직.
 """
 from dataclasses import dataclass, asdict
@@ -191,8 +191,6 @@ def build_embedding_text(place_name: str, place_category: str, review_text: str)
     """
     임베딩 텍스트 구성 전략: [장소 컨텍스트] + [리뷰 본문]
     → 검색 시 "동물원 청결 관련 리뷰 찾기" 같은 쿼리와 매칭 품질 향상
-
-    TODO: 이부분은 품질테스트 필요.
     """
     return f"[{place_category}] {place_name} 리뷰: {review_text}"
 
