@@ -74,6 +74,7 @@ def extract_message_text(content) -> str:
 
 
 def should_reuse_itinerary(user_text: str) -> bool:
+    # 일정 관련 요청이면 기존 itinerary를 다음 턴에서도 재사용합니다.
     schedule_keywords = [
         "일정", "코스", "플랜", "루트", "짜줘", "계획",
         "동선", "스케줄", "순서", "중심으로", "기준으로",
@@ -157,6 +158,7 @@ def initialize_greeting() -> None:
     if st.session_state.initialized:
         return
 
+    # 버튼 마크업이 포함된 초기 인사 문구를 만들어 첫 메시지로 저장합니다.
     greeting_raw = (
         "안녕하세요! 저는 여행 추천을 도와드릴 트립닷집이에요.\n"
         "어디로 여행을 가고 싶으신가요? [BUTTONS:국내 여행|해외 여행|아직 모르겠어요]"
@@ -320,6 +322,7 @@ def process_user_input(user_text: str) -> None:
         if not reuse_itinerary and st.session_state.get("itinerary"):
             print("DEBUG: Non-schedule turn detected. Ignoring stale itinerary.")
 
+        # UI 세션 상태와 대화 이력을 함께 묶어 그래프 입력으로 전달합니다.
         graph_input = {
             "messages": [
                 {"role": m["role"], "content": m["content"]}
@@ -383,6 +386,7 @@ def process_user_input(user_text: str) -> None:
         )
 
     # 6. 최종 응답 저장
+    # 버튼 마크업을 분리해 메시지 본문과 빠른 선택 버튼으로 저장합니다.
     reply_text, reply_buttons = parse_buttons(raw_reply)
     st.session_state.messages.append(
         {"role": "assistant", "content": reply_text, "time": now_label()}

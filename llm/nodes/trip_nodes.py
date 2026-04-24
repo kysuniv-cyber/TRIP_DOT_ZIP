@@ -15,6 +15,7 @@ LLM_MODEL = "gpt-4.1-mini"
 CURRENT_YEAR = date.today().year
 
 
+# 스타일 표현을 내부 표준값으로 맞추기 위한 별칭 사전
 STYLE_ALIASES = {
     "맛집": "맛집",
     "식당": "맛집",
@@ -36,6 +37,7 @@ STYLE_ALIASES = {
     "체험": "액티비티",
 }
 
+# 제약 조건 표현을 내부 표준값으로 맞추기 위한 별칭 사전
 CONSTRAINT_ALIASES = {
     "실내": "indoor",
     "실내위주": "indoor",
@@ -62,6 +64,7 @@ CONSTRAINT_ALIASES = {
 
 
 def _extract_destination(user_text: str) -> str | None:
+    # 자주 쓰는 여행지명과 세부 지역명을 기준으로 목적지를 추출합니다.
     known_destinations = [
         "서울", "부산", "인천", "대구", "대전", "광주", "울산",
         "수원", "제주", "제주도", "경주", "전주", "여수", "강릉",
@@ -87,6 +90,7 @@ def _extract_destination(user_text: str) -> str | None:
 
 
 def _extract_styles(user_text: str) -> list[str]:
+    # 문장 안의 선호 스타일 키워드를 찾아 표준 스타일 목록으로 정리합니다.
     style_keywords = {
         "맛집": ["맛집", "먹거리", "식당", "밥집", "한식", "중식", "일식"],
         "카페": ["카페", "커피", "베이커리", "디저트"],
@@ -107,6 +111,7 @@ def _extract_styles(user_text: str) -> list[str]:
 
 
 def _extract_constraints(user_text: str) -> list[str]:
+    # 이동 조건이나 동행 조건처럼 운영 제약에 해당하는 값을 추출합니다.
     constraint_keywords = {
         "indoor": ["실내", "비오면 실내", "실내 위주"],
         "outdoor": ["야외", "실외", "야외 위주"],
@@ -130,6 +135,7 @@ def _extract_constraints(user_text: str) -> list[str]:
 
 
 def _extract_date_fields(user_text: str) -> dict[str, Any]:
+    # 날짜 표현을 절대 날짜, 상대 일수, 원문 표현으로 나눠 보관합니다.
     result = {
         "travel_date": None,
         "relative_days": None,
@@ -162,6 +168,7 @@ def _extract_date_fields(user_text: str) -> dict[str, Any]:
 
 
 def _extract_start_time(user_text: str) -> str | None:
+    # 오전/오후 표현과 HH:MM 형식을 24시간 형식으로 정규화합니다.
     text = user_text.strip()
 
     match_ampm = re.search(r"(오전|오후)\s*(\d{1,2})(?::(\d{2}))?\s*시?", text)
@@ -194,6 +201,7 @@ def _extract_start_time(user_text: str) -> str | None:
 
 
 def _extract_date_fields_current_year(user_text: str) -> dict[str, Any]:
+    # 연도가 없는 월/일 입력은 현재 연도로 보정해 날짜 후보를 만듭니다.
     result = {
         "travel_date": None,
         "relative_days": None,
@@ -236,6 +244,7 @@ def _extract_date_fields_current_year(user_text: str) -> dict[str, Any]:
 
 
 def _normalize_messages(messages: list[Any]) -> list[dict[str, str]]:
+    # LangGraph 메시지 객체와 dict 메시지를 동일한 구조로 맞춥니다.
     normalized: list[dict[str, str]] = []
     for message in messages:
         if hasattr(message, "content"):
@@ -253,6 +262,7 @@ def _normalize_messages(messages: list[Any]) -> list[dict[str, str]]:
 
 
 def _safe_json_loads(content: str) -> dict[str, Any]:
+    # 모델이 JSON 앞뒤로 설명을 붙였을 때를 대비해 JSON 본문만 다시 파싱합니다.
     try:
         return json.loads(content)
     except json.JSONDecodeError:
@@ -263,6 +273,7 @@ def _safe_json_loads(content: str) -> dict[str, Any]:
 
 
 def _normalize_style_values(values: list[Any]) -> list[str]:
+    # 스타일 값을 중복 없이 표준 표현으로 정리합니다.
     normalized: list[str] = []
     for value in values or []:
         if not value:
@@ -274,6 +285,7 @@ def _normalize_style_values(values: list[Any]) -> list[str]:
 
 
 def _normalize_constraint_values(values: list[Any]) -> list[str]:
+    # 제약 조건 값을 중복 없이 표준 표현으로 정리합니다.
     normalized: list[str] = []
     for value in values or []:
         if not value:
@@ -290,6 +302,7 @@ def _call_trip_extractor_llm(
     current_state: dict[str, Any],
     mode: str,
 ) -> dict[str, Any]:
+    # 최근 대화와 현재 상태를 함께 보내 구조화된 여행 조건을 추출합니다.
     normalized_messages = _normalize_messages(messages)[-8:]
     system_prompt = f"""
 You extract structured travel planning data from a Korean conversation.
@@ -341,6 +354,7 @@ Rules:
 
 
 def _fallback_extract_updates(state: TravelAgentState, user_text: str) -> dict[str, Any]:
+    # LLM 호출이 실패하면 규칙 기반 추출로 최소한의 상태 갱신값을 만듭니다.
     current_destination = state.get(StateKeys.DESTINATION)
     current_styles = state.get(StateKeys.STYLES, [])
     current_constraints = state.get(StateKeys.CONSTRAINTS, [])
@@ -381,6 +395,7 @@ def _fallback_extract_updates(state: TravelAgentState, user_text: str) -> dict[s
 
 
 def _build_extract_updates(state: TravelAgentState, llm_result: dict[str, Any]) -> dict[str, Any]:
+    # LLM 추출 결과를 현재 상태와 합쳐 LangGraph 업데이트 형식으로 변환합니다.
     current_destination = state.get(StateKeys.DESTINATION)
     current_styles = state.get(StateKeys.STYLES, [])
     current_constraints = state.get(StateKeys.CONSTRAINTS, [])
@@ -426,6 +441,7 @@ def _build_extract_updates(state: TravelAgentState, llm_result: dict[str, Any]) 
 
 
 def extract_trip_requirements_node(state: TravelAgentState) -> dict:
+    # 일반 입력 턴에서 목적지, 스타일, 날짜, 시작 시간을 추출합니다.
     messages = state.get(StateKeys.MESSAGES, [])
     if not messages:
         return {}
@@ -456,6 +472,7 @@ def extract_trip_requirements_node(state: TravelAgentState) -> dict:
 
 
 def check_missing_info_node(state: TravelAgentState) -> dict:
+    # 다음 단계 진행에 필요한 필수 슬롯이 비었는지 점검합니다.
     missing_slots = []
 
     destination = state.get(StateKeys.DESTINATION)
@@ -467,6 +484,7 @@ def check_missing_info_node(state: TravelAgentState) -> dict:
 
 
 def ask_user_for_missing_info_node(state: TravelAgentState) -> dict:
+    # 필수 정보가 없을 때는 다음 질문 문구만 반환합니다.
     destination = state.get(StateKeys.DESTINATION)
 
     if not destination:

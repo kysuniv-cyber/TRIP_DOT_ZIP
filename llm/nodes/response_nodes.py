@@ -14,6 +14,7 @@ LLM_MODEL = "gpt-4.1-mini"
 
 
 def _truncate_places(places: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # 응답 생성에 필요한 장소 정보만 남겨 프롬프트 길이를 줄입니다.
     simplified = []
     for place in places[:5]:
         simplified.append(
@@ -28,6 +29,7 @@ def _truncate_places(places: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _truncate_itinerary(itinerary: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # 일정도 핵심 필드만 남겨 LLM 입력 크기를 관리합니다.
     simplified = []
     for item in itinerary[:8]:
         simplified.append(
@@ -42,6 +44,7 @@ def _truncate_itinerary(itinerary: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 
 def _build_display_date(state: TravelAgentState) -> str | None:
+    # 상태에 저장된 날짜를 사용자에게 보여줄 문자열 형식으로 변환합니다.
     travel_date = state.get(StateKeys.TRAVEL_DATE)
     raw_date_text = state.get(StateKeys.RAW_DATE_TEXT)
     if travel_date:
@@ -56,6 +59,7 @@ def _build_display_date(state: TravelAgentState) -> str | None:
 
 
 def _normalize_response_date(final_response: str, state: TravelAgentState) -> str:
+    # 모델이 날짜를 임의 형식으로 다시 쓰지 않도록 표시용 날짜로 맞춥니다.
     display_date = _build_display_date(state)
     if not display_date:
         return final_response
@@ -75,6 +79,7 @@ def _normalize_response_date(final_response: str, state: TravelAgentState) -> st
 
 
 def _build_fallback_response(state: TravelAgentState) -> str:
+    # LLM 응답 생성이 실패했을 때 상태값만으로 기본 답변을 만듭니다.
     itinerary = state.get(StateKeys.ITINERARY, [])
     destination = state.get(StateKeys.DESTINATION, "요청하신 지역")
     selected_places = state.get(StateKeys.SELECTED_PLACES, [])
@@ -105,6 +110,7 @@ def _build_fallback_response(state: TravelAgentState) -> str:
 
 
 def build_response_node(state: TravelAgentState) -> dict:
+    # 날씨 전용 응답은 직접 조립하고, 그 외에는 구조화된 상태를 LLM에 전달합니다.
     weather_data = state.get(StateKeys.WEATHER_DATA)
     itinerary = state.get(StateKeys.ITINERARY, [])
     destination = state.get(StateKeys.DESTINATION, "요청하신 지역")
@@ -148,6 +154,7 @@ def build_response_node(state: TravelAgentState) -> dict:
         "conversation_summary": summary,
     }
 
+    # 최종 답변은 상태에 있는 정보만 사용하도록 프롬프트를 제한합니다.
     system_prompt = """
 You are a Korean travel planning assistant.
 Write a natural final response in Korean based only on structured state data.
@@ -165,6 +172,7 @@ Rules:
 """.strip()
 
     try:
+        # 구조화된 payload를 바탕으로 자연스러운 최종 답변을 생성합니다.
         response = client.chat.completions.create(
             model=LLM_MODEL,
             temperature=0.3,
