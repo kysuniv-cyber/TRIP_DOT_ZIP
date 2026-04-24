@@ -192,21 +192,22 @@ H --> I[Vector DB 적재]
 
 I --> J[유사도 검색]
 
-J --> K[후보 장소 리스트 반환]
+J --> K[후보 Top-K 반환]
 
-K --> L[사용자 선택]
+K --> L[Rule-based Rerank 수행]
 
-L --> M{3개 선택 완료?}
+L --> M[지역/조건 필터링]
 
-M -->|No| J
-M -->|Yes| N[Schedule 생성]
+M --> N[Top-3 자동 선정]
 
-N --> O[Validation LLM]
+N --> O[Schedule 생성]
 
-O --> P{검증 통과?}
+O --> P[Validation LLM]
 
-P -->|Yes| Q[Final Response]
-P -->|No| J
+P --> Q{검증 통과?}
+
+Q -->|Yes| R[Final Response]
+Q -->|No| J
 ```
 
 👉 사용자와의 상호작용을 통해 점진적으로 결과를 확정하는 구조이다.
@@ -250,15 +251,43 @@ Trip Plan Flow 외에도 사용자 요청에 따라 아래와 같은 Flow가 동
 
 ### 3️⃣ Vector DB 기반 장소 추천 ⭐ (핵심 기능)
 
-* 리뷰 기반 의미 유사도 검색
-* 단순 필터링이 아닌 semantic search
+* Place API로 수집한 장소를 Vector DB(Chroma)에 저장
+* 사용자 입력을 기반으로 **리뷰/설명 임베딩 기반 유사도 검색 수행**
+* 단순 키워드 매칭이 아닌 **semantic search 적용**
+
+👉 1차 검색: Vector DB Top-K 후보 추출
 
 ---
 
-### 4️⃣ 사용자 선택 기반 장소 확정 ⭐ (핵심 기능)
+### 4️⃣ Rerank 기반 추천 정교화 ⭐ (핵심 기능)
+
+* 1차 후보 장소에 대해 **Rule-based scoring 방식으로 재정렬 수행**
+* 벡터 검색 결과에 다양한 조건을 반영하여 점수를 재계산
+
+반영 요소:
+- 벡터 검색 순위 (retrieval score)
+- 목적지 적합성
+- 사용자 질의 키워드
+- 선호 조건 (preferences)
+- 제약 조건 (constraints)
+- 날씨 기반 실내/실외 적합성
+- 장소 평점
+
+💡 핵심 특징:
+- LLM을 사용하지 않고도 다양한 조건을 반영한 경량 rerank 구조
+- 빠른 응답 속도와 안정적인 결과 제공
+
+---
+
+### 5️⃣ 필터링 및 Top-K 자동 선정 ⭐ (핵심 기능)
+
+* Rerank 결과를 기반으로 조건 필터링 수행
+* 목적지 및 조건에 맞는 장소만 선별
+
+👉 최종 Top-3 자동 선정
 
 ```text
-후보 10개 제공 → 사용자 선택 → 3개 확정
+Vector DB 검색 → Rerank → 지역 검증 → Top-3 확정
 ```
 
 ---
@@ -286,21 +315,25 @@ A[User Query] --> B[Place API 호출]
 
 B --> C[다양한 카테고리 후보 수집]
 
-C --> D[Vector DB 적재]
+C --> D[리뷰/메타데이터 전처리]
 
-D --> E[유사도 검색]
+D --> E[Vector DB 적재]
 
-E --> F[후보 Top-K 반환]
+E --> F[SelfQueryRetriever 기반 유사도 검색]
 
-F --> G[사용자 선택]
+F --> G[후보 Top-K 반환]
 
-G --> H[최종 장소 확정]
+G --> H[Rule-based Rerank]
 
-H --> I[Schedule 생성]
+H --> I[지역/조건 필터링]
 
-I --> J[Validation LLM]
+I --> J[Top-3 자동 선정]
 
-J --> K[결과 반환]
+J --> K[Schedule 생성]
+
+K --> L[Validation LLM]
+
+L --> M[결과 반환]
 ```
 
 👉 본 구조는 단순 키워드 검색이 아닌  
@@ -429,8 +462,8 @@ State는 크게 다음 6가지 영역으로 나뉜다:
 ### LangGraph
 → 복잡한 분기 및 상태 기반 흐름 제어를 위해 선택
 
-### Vector DB
-→ 리뷰 기반 의미 검색을 통한 추천 정확도 향상
+### Vector DB + Rerank
+→ 의미 기반 검색 + 규칙 기반 재정렬을 통해 추천 정확도 향상
 
 ### 사용자 선택 방식
 → 개인 취향 반영을 위한 핵심 구조
@@ -538,8 +571,8 @@ TRIP_DOT_ZIP/
 ## 🧠 한 줄 요약
 
 > **LangGraph 기반 LLM Agent가 사용자와 대화를 통해 여행 조건을 수집하고,  
-> Vector DB 기반 의미 검색 + 사용자 선택을 통해 장소를 확정한 뒤,  
-> 일정 생성 및 검증까지 수행하는 end-to-end 여행 추천 시스템**
+> **Vector DB 기반 의미 검색 + Rule-based Rerank + 자동 필터링을 통해  
+> 최적의 장소를 선정하고 일정 생성까지 수행하는 여행 추천 시스템**
 
 ---
 
