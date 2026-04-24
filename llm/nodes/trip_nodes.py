@@ -325,9 +325,9 @@ Return JSON only with this shape:
 
 Rules:
 - Keep values null if the user did not specify them.
-- Put experiential preferences in "styles" and operating conditions in "constraints".
-- styles examples: 맛집, 카페, 전시, 쇼핑, 풍경, 산책, 데이트, 관광, 액티비티
-- constraints examples: indoor, outdoor, quiet, budget, solo, couple, family, parents, kids, pet, 1박2일, 2박3일
+- destination: Should be specific location (ex. '부산 해운대', '서울 강남') mentioned by user. Use city names if no specific location is mentioned.
+- constraints: List of other operating conditions not included in destination (ex. indoor, outdoor, quiet, budget, solo, couple, family, parents, kids, pet, 1박2일, 2박3일)
+- styles: experiential preferences (ex. 맛집, 카페, 전시, 쇼핑, 풍경, 산책, 데이트, 관광, 액티비티)
 - "조용한", "실내", "부모님 모시고" belong to constraints, not styles.
 - Use "replace_styles": true when the user explicitly excludes or swaps styles, like "카페 말고 맛집".
 - Use "reset_place_context": true only when the destination clearly changed.
@@ -462,6 +462,28 @@ def extract_trip_requirements_node(state: TravelAgentState) -> dict:
     try:
         llm_result = _call_trip_extractor_llm(messages, current_state, mode="extract")
         updates = _build_extract_updates(state, llm_result)
+
+        # --- LLM의 판단을 보완하는 로직 추가 ---
+        new_dest = updates.get(StateKeys.DESTINATION)
+        new_constraints = updates.get(StateKeys.CONSTRAINTS, [])
+
+        if new_dest:
+            # constraints에 들어있는 단어 중 '근처', '위주', '동네' 등과 연결된 지명이 있는지 LLM이 다시 보게 하거나,
+            # 간단하게 constraints의 첫 번째 항목이 지명 성격이 강하면 destination과 합쳐줍니다.
+            # 예: destination="부산", constraints=["해운대 위주", "조용한"] -> destination="부산 해운대"
+
+            refined_dest = new_dest
+            for constraint in new_constraints:
+                # '위주', '근처', '쪽' 등의 키워드가 포함된 constraint가 있다면 상세 지명으로 판단
+                if any(suffix in constraint for suffix in ["위주", "근처", "쪽", "중심"]):
+                    location_part = constraint.replace("위주", "").replace("근처", "").replace("쪽", "").replace("중심",
+                                                                                                            "").strip()
+                    if location_part and location_part not in refined_dest:
+                        refined_dest = f"{refined_dest} {location_part}"
+                        break  # 하나만 합치고 종료
+
+            updates[StateKeys.DESTINATION] = refined_dest
+
     except Exception as exc:
         print(f"[DEBUG] extract_trip_requirements_node LLM fallback: {exc}")
         updates = _fallback_extract_updates(state, user_text)
@@ -658,9 +680,11 @@ def select_places_node(state: TravelAgentState) -> dict:
 
     # 검색된 전체 장소(mapped_places) 중 현재 도시와 관련된 것만 필터링
     if mapped_places and current_dest:
+        # '부산 해운대'를 ['부산', '해운대']로 나누어 하나라도 매칭되는지 확인
+        dest_tokens = current_dest.split()
         valid_mapped = [
             place for place in mapped_places
-            if current_dest in place.get("text", "") or current_dest in place.get("name", "")
+            if any(token in place.get("text", "") or token in place.get("name", "") for token in dest_tokens)
         ]
 
         if not valid_mapped:
