@@ -11,32 +11,32 @@ from llm.graph.contracts import StateKeys
 from utils.map_util import generate_map_from_state
 
 
-# 프로젝트 루트를 import 경로에 추가합니다.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _build_itinerary_dataframe(itinerary: list[dict]) -> pd.DataFrame:
-    """일정 리스트를 화면 표시용 표 형태로 변환합니다."""
+    """일정 리스트를 표 형태로 변환합니다."""
     rows = []
 
     for item in itinerary:
-        rows.append(
-            {
-                "순서": item.get("order", ""),
-                "장소명": item.get("place_name", ""),
-                "도착": item.get("arrival", ""),
-                "출발": item.get("departure", ""),
-                "체류시간": item.get("stay_time", ""),
-            }
-        )
+        row = {
+            "순서": item.get("order", ""),
+            "장소명": item.get("place_name", ""),
+            "도착": item.get("arrival", ""),
+            "출발": item.get("departure", ""),
+            "체류시간": item.get("stay_time", ""),
+        }
+        if item.get("day") is not None:
+            row = {"일차": item.get("day", ""), **row}
+        rows.append(row)
 
     return pd.DataFrame(rows)
 
 
 def render_itinerary_map(state: dict, key_suffix: str = "confirmed") -> None:
-    """일정 상태를 기반으로 지도를 생성해 본문에 표시합니다."""
+    """일정 상태를 기반으로 지도를 생성해 화면에 보여줍니다."""
     travel_map_obj = generate_map_from_state(state)
 
     if not travel_map_obj:
@@ -56,11 +56,11 @@ def render_itinerary_map(state: dict, key_suffix: str = "confirmed") -> None:
 
 
 def render_confirmed_plan() -> None:
-    """확정된 일정표와 지도를 나란히 보여줍니다."""
+    """확정된 일정을 표와 지도로 함께 보여줍니다."""
     itinerary = st.session_state.get("confirmed_itinerary") or st.session_state.get("itinerary", [])
 
     if not itinerary:
-        st.info("확정할 일정이 아직 없습니다. 먼저 대화를 통해 일정을 만들어주세요.")
+        st.info("확정된 일정이 아직 없습니다. 먼저 대화를 통해 일정을 만들어주세요.")
         return
 
     st.markdown("## 확정 일정")

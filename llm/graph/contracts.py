@@ -26,6 +26,7 @@ class StateKeys:
     TRAVEL_DATE = "travel_date"
     RELATIVE_DAYS = "relative_days"
     RAW_DATE_TEXT = "raw_date_text"
+    TRIP_LENGTH = "trip_length"
 
     # 흐름 제어
     NEED_WEATHER = "need_weather"

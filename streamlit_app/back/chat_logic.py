@@ -37,13 +37,11 @@ from llm.graph.builder import app as graph_app
 from test_backup.proto.utils import parse_buttons
 from streamlit_app.back.session_state import (
     now_label,
-    update_trip_info,
     build_persona_context,
 )
 
 from streamlit_app.back.session_state import (
     now_label,
-    update_trip_info,
     build_persona_context,
 )
 
@@ -284,10 +282,7 @@ def process_user_input(user_text: str) -> None:
     print("DEBUG: process_user_input 진입")
     print("DEBUG: user_text =", user_text)
 
-    # 1. 여행 정보 업데이트
-    update_trip_info(user_text)
-
-    # 2. 사용자 메시지 저장
+    # 1. 사용자 메시지 저장
     st.session_state.messages.append(
         {"role": "user", "content": user_text, "time": now_label()}
     )
@@ -331,6 +326,7 @@ def process_user_input(user_text: str) -> None:
             "styles": st.session_state.get("styles", []),
             "constraints": st.session_state.get("constraints", []),
             "travel_date": st.session_state.get("travel_date"),
+            "trip_length": st.session_state.get("trip_length"),
             "start_time": st.session_state.get("start_time"),
             "selected_places": current_selected, # 정제된 리스트 전달
             "itinerary": current_itinerary,
@@ -346,7 +342,7 @@ def process_user_input(user_text: str) -> None:
         # 4-1. 그래프 실행 결과로 업데이트된 상태를 Streamlit 세션에 저장
         # 필드가 존재하는지 확인하고, None이 아니면 덮어씁니다.
         state_fields = [
-            "destination", "styles", "constraints", "travel_date",
+            "destination", "styles", "constraints", "travel_date", "trip_length",
             "start_time", "selected_places", "mapped_places", "itinerary"
         ]
 

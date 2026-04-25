@@ -142,6 +142,18 @@ def _extract_constraints(user_text: str) -> list[str]:
     return found_constraints
 
 
+def _extract_trip_length(user_text: str) -> str | None:
+    # 일정 길이는 제약과 분리해서 별도 상태값으로 관리한다.
+    compact_text = user_text.replace(" ", "")
+    if "2박3일" in compact_text:
+        return "2박3일"
+    if "1박2일" in compact_text:
+        return "1박2일"
+    if any(keyword in compact_text for keyword in ["당일치기", "하루만", "하루코스", "당일"]):
+        return "당일치기"
+    return None
+
+
 def _extract_date_fields(user_text: str) -> dict[str, Any]:
     # 날짜 표현을 절대 날짜, 상대 일수, 원문 표현으로 나눠 보관합니다.
     result = {
@@ -338,6 +350,20 @@ def _normalize_constraint_values(values: list[Any]) -> list[str]:
     return normalized
 
 
+def _split_trip_length_from_constraints(constraints: list[str], user_text: str) -> tuple[list[str], str | None]:
+    # constraint 목록에 섞여 들어온 일정 길이 표현을 분리해 별도 필드로 보관한다.
+    filtered_constraints: list[str] = []
+    trip_length = _extract_trip_length(user_text)
+
+    for value in constraints:
+        if value in {"1박2일", "2박3일", "당일치기"}:
+            trip_length = value
+            continue
+        filtered_constraints.append(value)
+
+    return filtered_constraints, trip_length
+
+
 def _call_trip_extractor_llm(
     messages: list[Any],
     current_state: dict[str, Any],
@@ -404,6 +430,7 @@ def _fallback_extract_updates(state: TravelAgentState, user_text: str) -> dict[s
     destination = _extract_destination(user_text)
     styles = _extract_styles(user_text)
     constraints = _extract_constraints(user_text)
+    constraints, trip_length = _split_trip_length_from_constraints(constraints, user_text)
     date_info = _extract_date_fields_current_year(user_text)
     start_time = _extract_start_time(user_text)
 
@@ -423,6 +450,11 @@ def _fallback_extract_updates(state: TravelAgentState, user_text: str) -> dict[s
         updates[StateKeys.CONSTRAINTS] = list(dict.fromkeys(current_constraints + constraints))
     elif current_constraints:
         updates[StateKeys.CONSTRAINTS] = current_constraints
+
+    if trip_length:
+        updates[StateKeys.TRIP_LENGTH] = trip_length
+    elif state.get(StateKeys.TRIP_LENGTH):
+        updates[StateKeys.TRIP_LENGTH] = state.get(StateKeys.TRIP_LENGTH)
 
     if date_info.get("travel_date"):
         updates[StateKeys.TRAVEL_DATE] = date_info["travel_date"]
@@ -451,6 +483,7 @@ def _build_extract_updates(
     destination = llm_result.get("destination")
     styles = _normalize_style_values(llm_result.get("styles") or [])
     constraints = _normalize_constraint_values(llm_result.get("constraints") or [])
+    constraints, trip_length = _split_trip_length_from_constraints(constraints, user_text)
 
     if destination:
         updates[StateKeys.DESTINATION] = destination
@@ -474,6 +507,11 @@ def _build_extract_updates(
         updates[StateKeys.CONSTRAINTS] = list(dict.fromkeys(current_constraints + constraints))
     elif current_constraints:
         updates[StateKeys.CONSTRAINTS] = current_constraints
+
+    if trip_length:
+        updates[StateKeys.TRIP_LENGTH] = trip_length
+    elif state.get(StateKeys.TRIP_LENGTH):
+        updates[StateKeys.TRIP_LENGTH] = state.get(StateKeys.TRIP_LENGTH)
 
     if llm_result.get("travel_date"):
         updates[StateKeys.TRAVEL_DATE] = llm_result["travel_date"]
@@ -511,6 +549,7 @@ def extract_trip_requirements_node(state: TravelAgentState) -> dict:
         "travel_date": state.get(StateKeys.TRAVEL_DATE),
         "relative_days": state.get(StateKeys.RELATIVE_DAYS),
         "raw_date_text": state.get(StateKeys.RAW_DATE_TEXT),
+        "trip_length": state.get(StateKeys.TRIP_LENGTH),
         "start_time": state.get(StateKeys.START_TIME),
     }
 
@@ -654,9 +693,15 @@ def modify_trip_requirements_node(state: TravelAgentState) -> dict:
 
     # 4. 제약 조건(예: '휠체어 가능', '반려동물 동반') 업데이트
     constraints = _normalize_constraint_values(llm_result.get("constraints") or [])
+    constraints, trip_length = _split_trip_length_from_constraints(constraints, user_text)
     if constraints:
         current_constraints = state.get(StateKeys.CONSTRAINTS, [])
         updates[StateKeys.CONSTRAINTS] = list(dict.fromkeys(current_constraints + constraints))
+
+    if trip_length:
+        updates[StateKeys.TRIP_LENGTH] = trip_length
+    elif state.get(StateKeys.TRIP_LENGTH):
+        updates[StateKeys.TRIP_LENGTH] = state.get(StateKeys.TRIP_LENGTH)
 
     # 5. 날짜 정보 업데이트: 배타적 업데이트 (하나가 정해지면 나머지는 초기화)
     if llm_result.get("travel_date"):
@@ -792,7 +837,10 @@ def select_places_node(state: TravelAgentState) -> dict:
         if is_restaurant:
             restaurant_count += 1
 
-        if len(unique_selected) >= 3:
+        trip_length = state.get(StateKeys.TRIP_LENGTH) or "당일치기"
+        max_places = {"당일치기": 3, "1박2일": 6, "2박3일": 9}.get(trip_length, 3)
+
+        if len(unique_selected) >= max_places:
             break
 
     # 최종 후보 3개 선택 및 일정 리셋 (scheduler가 새 일정을 짜도록 유도)

@@ -17,13 +17,14 @@ from streamlit_app.back.session_state import (
     get_chat_slot_items,
     reset_user_profile,
     switch_chat_slot,
+    now_label,
 )
 from streamlit_app.back.database import (
     load_profile_from_db,
     list_saved_profiles,
     save_profile_to_db,
 )
-from streamlit_app.back.session_state import now_label
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -57,13 +58,13 @@ def render_profile_setup() -> None:
         """
         <div class="chat-header">
             <h1>여행 추천을 시작하기 전에 알려주세요</h1>
-            <p>입력한 정보는 현재 세션의 추천 품질을 높이는 데만 사용됩니다.</p>
+            <p>입력한 정보는 현재 세션의 추천 정확도를 높이는 용도로 사용됩니다.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.info("프로필은 MySQL에 저장되며, 이후 다시 불러올 수 있습니다.")
+    st.info("프로필은 MySQL에 저장되며 이후 다시 불러올 수 있습니다.")
 
     saved_profiles = list_saved_profiles()
     if saved_profiles:
@@ -84,12 +85,12 @@ def render_profile_setup() -> None:
                 st.rerun()
 
     with st.form("persona_profile_form"):
-        nickname = st.text_input("닉네임 또는 이름", placeholder="예: 민지")
+        nickname = st.text_input("닉네임 또는 이름", placeholder="예: 민수")
         col1, col2 = st.columns(2)
         with col1:
             age_group = st.selectbox("연령대", ["선택 안함", "10대", "20대", "30대", "40대", "50대", "60대 이상"])
         with col2:
-            gender = st.selectbox("성별", ["선택 안함", "여성", "남성", "기타"])
+            gender = st.selectbox("성별", ["선택 안함", "남성", "여성", "기타"])
 
         companion = st.selectbox(
             "주요 동행",
@@ -106,7 +107,7 @@ def render_profile_setup() -> None:
 
         col3, col4 = st.columns(2)
         with col3:
-            pace = st.selectbox("이동 강도", ["선택 안함", "여유롭게", "보통", "빽빽해도 괜찮음"])
+            pace = st.selectbox("이동 강도", ["선택 안함", "여유롭게", "보통", "빡빡해도 괜찮음"])
         with col4:
             indoor_outdoor = st.selectbox("실내/실외 선호", ["선택 안함", "실내 위주", "실외 위주", "상관 없음"])
 
@@ -136,7 +137,7 @@ def render_message(message: dict) -> None:
     wrapper_class = "user" if role == "user" else ""
     avatar_class = "user" if role == "user" else "bot"
     mouse_icon = image_data_uri(str(MOUSE_ICON_IMAGE))
-    avatar = "나" if role == "user" else f'<img src="{mouse_icon}" alt="트립닷집">'
+    avatar = "나" if role == "user" else f'<img src="{mouse_icon}" alt="트립땃쥐">'
     content = html.escape(message["content"]).replace("\n", "<br>")
     timestamp = html.escape(message.get("time", ""))
 
@@ -162,10 +163,10 @@ def render_loading_message() -> None:
             <div class="avatar bot">AI</div>
             <div class="message-group">
                 <div class="bubble bot loading-bubble">
-                    <img class="loading-mouse" src="{image_src}" alt="트립닷집 안내 캐릭터">
+                    <img class="loading-mouse" src="{image_src}" alt="트립땃쥐 안내 캐릭터">
                     <div class="loading-text">
-                        <strong>트립닷집이 여행 코스를 찾고 있어요</strong>
-                        <span>날씨와 취향을 함께 보고 있는 중...</span>
+                        <strong>트립땃쥐가 여행 코스를 찾고 있어요</strong>
+                        <span>요청과 취향을 함께 보고 있는 중이에요.</span>
                         <div class="loading-dots"><i></i><i></i><i></i></div>
                     </div>
                 </div>
@@ -192,15 +193,18 @@ def render_info_card(icon: str, label: str, value: str) -> None:
 
 
 def render_left_panel() -> None:
-    info = st.session_state.trip_info
     mouse_icon = image_data_uri(str(MOUSE_ICON_IMAGE))
+    destination = st.session_state.get("destination") or "미정"
+    travel_date = st.session_state.get("travel_date") or "미정"
+    trip_length = st.session_state.get("trip_length") or "당일치기"
+    styles = format_list_value(st.session_state.get("styles", []))
 
     st.markdown(
         f"""
         <div class="brand">
-            <div class="brand-icon"><img src="{mouse_icon}" alt="트립닷집"></div>
+            <div class="brand-icon"><img src="{mouse_icon}" alt="트립땃쥐"></div>
             <div>
-                <div class="brand-name">트립닷집</div>
+                <div class="brand-name">트립땃쥐</div>
                 <div class="brand-desc">AI 여행 추천 챗봇</div>
             </div>
         </div>
@@ -209,10 +213,11 @@ def render_left_panel() -> None:
     )
 
     st.markdown('<div class="side-title">나의 현재 여행 조건</div>', unsafe_allow_html=True)
-    render_info_card("P", "목적지", info["destination"])
-    render_info_card("D", "여행 날짜", info["date"])
-    render_info_card("N", "인원", info["people"])
-    render_info_card("S", "여행 스타일", info["style"])
+    # 사이드바도 실제 세션 상태를 그대로 보여줘야 대화와 화면이 같은 값을 바라봅니다.
+    render_info_card("P", "목적지", destination)
+    render_info_card("D", "여행 날짜", travel_date)
+    render_info_card("L", "일정 길이", trip_length)
+    render_info_card("S", "여행 스타일", styles)
 
     profile = st.session_state.get("user_profile", {})
     if profile:
@@ -230,7 +235,7 @@ def render_left_panel() -> None:
     st.markdown('<div class="side-title">채팅 전환</div>', unsafe_allow_html=True)
     for item in get_chat_slot_items():
         count_text = f"메시지 {item['message_count']}개"
-        active_prefix = "● " if item["active"] else ""
+        active_prefix = "현재 " if item["active"] else ""
         label = f"{active_prefix}{item['title']} | {count_text}"
         if st.button(label, key=f"chat_slot_{item['slot_id']}", use_container_width=True):
             switch_chat_slot(item["slot_id"])
@@ -244,7 +249,7 @@ def render_left_panel() -> None:
     has_itinerary = bool(st.session_state.get("itinerary"))
 
     if st.button("일정 확정", use_container_width=True, disabled=not has_itinerary):
-        # 현재 생성된 일정을 확정 화면에서 그대로 보여주기 위해 별도 상태에 저장합니다.
+        # 현재 생성된 일정을 확정 화면에서 그대로 보여주기 위해 별도 상태에 담습니다.
         st.session_state.confirmed_itinerary = list(st.session_state.get("itinerary", []))
         st.session_state.show_confirmed_plan = True
         st.rerun()
@@ -260,8 +265,8 @@ def render_intro() -> None:
     st.markdown(
         """
         <div class="chat-header">
-            <h1>딱맞는 <span class="accent">AI 여행 추천</span> 챗봇</h1>
-            <p>당신의 일정과 취향에 맞는 여행지를 함께 찾아드릴게요</p>
+            <h1>당신만의 <span class="accent">AI 여행 추천</span> 챗봇</h1>
+            <p>요청한 일정과 취향에 맞는 여행지를 함께 찾아드릴게요.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -287,24 +292,20 @@ def render_chat_area() -> None:
                     st.rerun()
 
     if st.session_state.get("show_confirmed_plan"):
-        # 확정된 일정은 채팅 아래에서 표와 지도를 함께 보여줍니다.
+        # 확정된 일정은 채팅 아래에서 표와 지도로 함께 보여줍니다.
         render_confirmed_plan()
 
-    user_input = st.chat_input("여행에 대해 무엇이든 물어보세요...")
+    user_input = st.chat_input("여행에 대해 무엇이든 물어보세요.")
     if user_input and user_input.strip():
-    
-        # 로딩바가 뜨기 전에 사용자의 메시지가 먼저 보일 수 있도록 수정(260425 jyhong)
+        # 로딩 전에 사용자 메시지를 먼저 보여줘서 응답 지연 체감을 줄입니다.
         new_msg = {"role": "user", "content": user_input.strip(), "time": now_label()}
-        # 사용자 메시지 렌더링
         render_message(new_msg)
-        
+
         loading_slot = st.empty()
-        
-        # 땃쥐 로딩바
         with loading_slot.container():
             render_loading_message()
 
         process_user_input(user_input.strip())
-        
+
         loading_slot.empty()
         st.rerun()

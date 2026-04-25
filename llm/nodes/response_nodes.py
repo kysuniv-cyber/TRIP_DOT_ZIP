@@ -156,7 +156,7 @@ def build_response_node(state: TravelAgentState) -> dict:
 
     # 최종 답변은 상태에 있는 정보만 사용하도록 프롬프트를 제한합니다.
     system_prompt = """
-You are a specialized Korean travel assistant focusing ONLY on day-trip (single-day) itineraries.
+You are a specialized Korean travel assistant for Korean travel planning.
 Write a natural final response in Korean based only on structured state data.
 
 [Response Rules]

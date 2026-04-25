@@ -71,6 +71,7 @@ class TravelAgentState(TypedDict, total=False):
     travel_date: str
     relative_days: int
     raw_date_text: str
+    trip_length: str
     start_time: str
 
     # 장소 / 일정 / 날씨

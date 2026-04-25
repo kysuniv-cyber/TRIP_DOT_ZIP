@@ -185,8 +185,8 @@ class intent_node():
             "weather_query": "weather",
             "schedule_generation": "schedule",
             "place_search": "place",
-            "travel_recommendation": "place",
-            "general_chat": "response"
+            "travel_recommendation": "travel",
+            "general_chat": "chat"
         }
 
         return {

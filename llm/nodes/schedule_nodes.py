@@ -6,6 +6,7 @@ from services.scheduler_service import create_schedule
 def scheduler_node(state: TravelAgentState) -> dict:
     selected_places = state.get(StateKeys.SELECTED_PLACES, [])
     start_time = state.get(StateKeys.START_TIME, "09:00")
+    trip_length = state.get(StateKeys.TRIP_LENGTH, "당일치기")
 
     if not selected_places:
         print("[DEBUG] scheduler_node skipped: no validated selected_places")
@@ -34,6 +35,7 @@ def scheduler_node(state: TravelAgentState) -> dict:
     itinerary_result = create_schedule(
         places=normalized_places,
         start_time_str=start_time,
+        trip_length=trip_length,
     )
 
     if isinstance(itinerary_result, dict) and itinerary_result.get("status") == "error":
