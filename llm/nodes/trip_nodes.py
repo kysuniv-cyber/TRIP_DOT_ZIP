@@ -588,38 +588,79 @@ def extract_trip_requirements_node(state: TravelAgentState) -> dict:
 
 
 def check_missing_info_node(state: TravelAgentState) -> dict:
-    # 다음 단계 진행에 필요한 필수 슬롯이 비었는지 점검합니다.
+    """
+    다음 단계 진행에 필요한 필수 슬롯이 비어 있는지 점검하는 노드입니다.
+
+    현재 기준에서 필수 정보는 다음 2개입니다.
+    - destination (지역)
+    - travel_date (여행 날짜)
+
+    날짜는 아래 값 중 하나라도 존재하면 입력된 것으로 간주합니다.
+    - StateKeys.TRAVEL_DATE
+    - StateKeys.RAW_DATE_TEXT
+    - StateKeys.RELATIVE_DAYS
+
+    반환값:
+    - StateKeys.MISSING_SLOTS: 아직 비어 있는 필수 슬롯 목록
+    - "info_complete": 필수 정보가 모두 채워졌는지 여부
+
+    참고:
+    - start_time은 선택 정보이므로 필수 검사에 포함하지 않습니다.
+    - route 값과 관계없이 지역과 날짜는 모두 필수로 검사합니다.
+    """
     missing_slots = []
-    route = state.get(StateKeys.ROUTE)
 
     destination = state.get(StateKeys.DESTINATION)
     if not destination:
         missing_slots.append(StateKeys.DESTINATION)
 
-    if route == "weather":
-        # 날씨 조회는 날짜가 없으면 실제 판단이 어려우므로 필수 슬롯으로 본다.
-        has_any_date = bool(
-            state.get(StateKeys.TRAVEL_DATE)
-            or state.get(StateKeys.RAW_DATE_TEXT)
-            or state.get(StateKeys.RELATIVE_DAYS) is not None
-        )
-        if not has_any_date:
-            missing_slots.append(StateKeys.TRAVEL_DATE)
+    has_any_date = bool(
+        state.get(StateKeys.TRAVEL_DATE)
+        or state.get(StateKeys.RAW_DATE_TEXT)
+        or state.get(StateKeys.RELATIVE_DAYS) is not None
+    )
+    if not has_any_date:
+        missing_slots.append(StateKeys.TRAVEL_DATE)
 
     print("[DEBUG] check_missing_info_node missing_slots =", missing_slots)
-    return {StateKeys.MISSING_SLOTS: missing_slots}
+
+    return {
+        StateKeys.MISSING_SLOTS: missing_slots,
+        "info_complete": len(missing_slots) == 0,
+    }
 
 
 def ask_user_for_missing_info_node(state: TravelAgentState) -> dict:
-    # 필수 정보가 없을 때는 다음 질문 문구만 반환합니다.
+    """
+    현재 state를 기준으로, 아직 채워지지 않은 필수 정보 1개만 질문하는 노드입니다.
+
+    필수 정보는 다음 2개만 대상으로 합니다.
+    1. destination (지역)
+    2. travel_date (여행 날짜)
+
+    동작 방식:
+    - 지역이 없으면 지역을 먼저 질문합니다.
+    - 지역은 있지만 여행 날짜가 없으면 날짜를 질문합니다.
+    - 필수 정보가 모두 채워져 있으면 추가 질문 없이 빈 dict를 반환합니다.
+
+    주의:
+    - 한 번에 여러 정보를 묻지 않습니다.
+    - start_time, duration, companions, theme, budget 등은
+      필수 정보가 아니므로 이 노드에서 질문하지 않습니다.
+    """
     destination = state.get(StateKeys.DESTINATION)
+    travel_date = state.get(StateKeys.TRAVEL_DATE)
+    missing_slots = state.get(StateKeys.MISSING_SLOTS, [])
 
     if not destination:
-        return {StateKeys.FINAL_RESPONSE: "어느 지역으로 여행 일정을 짜드릴까요?"}
+        return {
+            StateKeys.FINAL_RESPONSE: "어느 지역으로 여행 일정을 짜드릴까요?"
+        }
 
-    if StateKeys.TRAVEL_DATE in missing_slots:
-        # 날씨 질문 맥락에서는 날짜를 다시 물어 다음 턴에 바로 조회할 수 있게 한다.
-        return {StateKeys.FINAL_RESPONSE: "여행 날짜를 알려주시면 그날 날씨를 바로 확인해드릴게요."}
+    if travel_date in missing_slots:
+        return {
+            StateKeys.FINAL_RESPONSE: "언제로 계획 중이신가요?"
+        }
 
     return {}
 
